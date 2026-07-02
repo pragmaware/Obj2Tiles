@@ -31,7 +31,7 @@ public static partial class StagesFacade
             _ => throw new ArgumentOutOfRangeException(nameof(splitPointStrategy))
         };
 
-        var splitPlan = new Dictionary<string, Vertex3>();
+        var splitPlan = new ConcurrentDictionary<string, Vertex3>();
         if (splitPointStrategy == SplitPointStrategy.VertexMedian)
         {
             if (zsplit)
@@ -59,8 +59,14 @@ public static partial class StagesFacade
             _ => throw new ArgumentOutOfRangeException(nameof(splitPointStrategy))
         };
 
+        // GetOrAdd (rather than TryGetValue + fallback) ensures that when a LOD's actual
+        // geometry reaches a tree node the plan didn't anticipate (e.g. because decimation
+        // relocated vertices outside the region LOD-0's vertices occupied), the first LOD
+        // to hit that node computes the split point and every other LOD reuses the same
+        // value — keeping sibling LODs' tile boundaries at that node identical instead of
+        // each independently drifting to a different point.
         Func<IMesh, Vertex3> replaySplitPoint = m =>
-            splitPlan.TryGetValue(m.Name, out var pt) ? pt : baseSplitPoint(m);
+            splitPlan.GetOrAdd(m.Name, _ => baseSplitPoint(m));
 
         // Split all LODs in parallel using the pre-computed split plan.
         // In octree mode, the finest LOD (index=0) gets the most divisions; each coarser LOD gets one fewer.
@@ -281,7 +287,7 @@ public static partial class StagesFacade
     /// Mirrors RecurseSplitXY(mesh, depth, Func, meshes).
     /// </summary>
     private static void PreComputeSplitPlanXY(Vertex3[] verts, string name, int depth,
-        Func<Vertex3[], Vertex3> computeCenter, Dictionary<string, Vertex3> plan)
+        Func<Vertex3[], Vertex3> computeCenter, ConcurrentDictionary<string, Vertex3> plan)
     {
         if (depth == 0 || verts.Length == 0) return;
 
@@ -304,7 +310,7 @@ public static partial class StagesFacade
     /// Mirrors RecurseSplitXYZ(mesh, depth, Func, meshes).
     /// </summary>
     private static void PreComputeSplitPlanXYZ(Vertex3[] verts, string name, int depth,
-        Func<Vertex3[], Vertex3> computeCenter, Dictionary<string, Vertex3> plan)
+        Func<Vertex3[], Vertex3> computeCenter, ConcurrentDictionary<string, Vertex3> plan)
     {
         if (depth == 0 || verts.Length == 0) return;
 
@@ -336,7 +342,7 @@ public static partial class StagesFacade
     /// Mirrors RecurseSplitXYBalanced(mesh, depth, Func, meshes).
     /// </summary>
     private static void PreComputeSplitPlanXYBalanced(Vertex3[] verts, string name, int depth,
-        Func<Vertex3[], Vertex3> computeCenter, Dictionary<string, Vertex3> plan)
+        Func<Vertex3[], Vertex3> computeCenter, ConcurrentDictionary<string, Vertex3> plan)
     {
         if (depth == 0 || verts.Length == 0) return;
 
@@ -377,7 +383,7 @@ public static partial class StagesFacade
     /// Mirrors RecurseSplitXYZBalanced(mesh, depth, Func, meshes).
     /// </summary>
     private static void PreComputeSplitPlanXYZBalanced(Vertex3[] verts, string name, int depth,
-        Func<Vertex3[], Vertex3> computeCenter, Dictionary<string, Vertex3> plan)
+        Func<Vertex3[], Vertex3> computeCenter, ConcurrentDictionary<string, Vertex3> plan)
     {
         if (depth == 0 || verts.Length == 0) return;
 
