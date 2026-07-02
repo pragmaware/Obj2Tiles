@@ -202,4 +202,96 @@ public class MtlParsingTests
         finally { Directory.Delete(dir, true); }
     }
 
+    // --- Normal map keywords: norm / map_Bump / map_bump / bump ---
+
+    [Test]
+    public void ReadMtl_Norm_ParsesNormalMap()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "normal.png"), "x");
+            var mtl = Path.Combine(dir, "m.mtl");
+            File.WriteAllText(mtl, "newmtl X\nnorm normal.png\n");
+            var materials = Material.ReadMtl(mtl, out var deps);
+            materials[0].NormalMap.ShouldNotBeNull();
+            materials[0].NormalMap!.EndsWith("normal.png").ShouldBeTrue();
+            deps.Length.ShouldBe(1);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Test]
+    public void ReadMtl_MapBump_ParsesNormalMap()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "normal.png"), "x");
+            var mtl = Path.Combine(dir, "m.mtl");
+            File.WriteAllText(mtl, "newmtl X\nmap_Bump normal.png\n");
+            var materials = Material.ReadMtl(mtl, out var deps);
+            materials[0].NormalMap.ShouldNotBeNull();
+            materials[0].NormalMap!.EndsWith("normal.png").ShouldBeTrue();
+            deps.Length.ShouldBe(1);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Test]
+    public void ReadMtl_MapBumpLowercase_ParsesNormalMap()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "normal.png"), "x");
+            var mtl = Path.Combine(dir, "m.mtl");
+            File.WriteAllText(mtl, "newmtl X\nmap_bump normal.png\n");
+            var materials = Material.ReadMtl(mtl, out var deps);
+            materials[0].NormalMap.ShouldNotBeNull();
+            materials[0].NormalMap!.EndsWith("normal.png").ShouldBeTrue();
+            deps.Length.ShouldBe(1);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Test]
+    public void ReadMtl_Bump_ParsesNormalMap()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "normal.png"), "x");
+            var mtl = Path.Combine(dir, "m.mtl");
+            File.WriteAllText(mtl, "newmtl X\nbump normal.png\n");
+            var materials = Material.ReadMtl(mtl, out var deps);
+            materials[0].NormalMap.ShouldNotBeNull();
+            materials[0].NormalMap!.EndsWith("normal.png").ShouldBeTrue();
+            deps.Length.ShouldBe(1);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Test]
+    public void ReadMtl_MapBump_StripsLeadingOptions_FindsTexture()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "normal.png"), "x");
+            var mtl = Path.Combine(dir, "m.mtl");
+            File.WriteAllText(mtl, "newmtl X\nmap_Bump -bm 1.0 normal.png\n");
+            var materials = Material.ReadMtl(mtl, out var deps);
+            materials[0].NormalMap.ShouldNotBeNull();
+            materials[0].NormalMap!.EndsWith("normal.png").ShouldBeTrue();
+            deps.Length.ShouldBe(1);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
 }
