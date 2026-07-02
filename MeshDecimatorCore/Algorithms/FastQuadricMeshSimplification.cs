@@ -761,8 +761,6 @@ namespace MeshDecimatorCore.Algorithms
                 int ofs;
                 int id;
                 int borderVertexCount = 0;
-                double borderMinX = double.MaxValue;
-                double borderMaxX = double.MinValue;
                 for (int i = 0; i < vertexCount; i++)
                 {
                     int tstart = vertices[i].tstart;
@@ -806,92 +804,188 @@ namespace MeshDecimatorCore.Algorithms
                             id = vids[j];
                             vertices[id].border = true;
                             ++borderVertexCount;
-
-                            if (Options.EnableSmartLink)
-                            {
-                                if (vertices[id].p.x < borderMinX)
-                                {
-                                    borderMinX = vertices[id].p.x;
-                                }
-                                if (vertices[id].p.x > borderMaxX)
-                                {
-                                    borderMaxX = vertices[id].p.x;
-                                }
-                            }
                         }
                     }
                 }
 
                 if (Options.EnableSmartLink)
                 {
-                    // First find all border vertices
+                    // Hash range is computed over ALL vertices (not just border ones) so that
+                    // border vertices and the full candidate pool below share one comparable
+                    // hash space.
+                    double allMinX = double.MaxValue;
+                    double allMaxX = double.MinValue;
+                    for (int i = 0; i < vertexCount; i++)
+                    {
+                        if (vertices[i].p.x < allMinX) allMinX = vertices[i].p.x;
+                        if (vertices[i].p.x > allMaxX) allMaxX = vertices[i].p.x;
+                    }
+                    double areaWidth = allMaxX - allMinX;
+                    if (areaWidth <= 0) areaWidth = 1; // degenerate mesh (no X extent)
+
+                    int VertexHash(int i) =>
+                        (int)(((((vertices[i].p.x - allMinX) / areaWidth) * 2.0) - 1.0) * int.MaxValue);
+
+                    // Candidates to weld INTO can be any vertex, not just ones already flagged
+                    // border. A small isolated fragment (e.g. a duplicate-position vertex
+                    // introduced by a mismatched UV/attribute index in the source data) has
+                    // border edges all the way around, but the vertex it should reconnect to
+                    // in the main surface is normally a perfectly ordinary, fully-interior
+                    // (non-border) vertex -- restricting candidates to border-only vertices can
+                    // never find that match, leaving the fragment permanently disconnected.
+                    var allVertices = new BorderVertex[vertexCount];
+                    for (int i = 0; i < vertexCount; i++)
+                    {
+                        allVertices[i] = new BorderVertex(i, VertexHash(i));
+                    }
+                    Array.Sort(allVertices, BorderVertexComparer.instance);
+
+                    // Only border vertices seed a weld search, keeping the search cost
+                    // proportional to the number of open/isolated edges rather than the full mesh.
                     var borderVertices = new BorderVertex[borderVertexCount];
                     int borderIndexCount = 0;
-                    double borderAreaWidth = borderMaxX - borderMinX;
                     for (int i = 0; i < vertexCount; i++)
                     {
                         if (vertices[i].border)
                         {
-                            int vertexHash = (int)(((((vertices[i].p.x - borderMinX) / borderAreaWidth) * 2.0) - 1.0) * int.MaxValue);
-                            borderVertices[borderIndexCount] = new BorderVertex(i, vertexHash);
+                            borderVertices[borderIndexCount] = new BorderVertex(i, VertexHash(i));
                             ++borderIndexCount;
                         }
                     }
-
-                    // Sort the border vertices by hash
                     Array.Sort(borderVertices, 0, borderIndexCount, BorderVertexComparer.instance);
 
                     // Calculate the maximum hash distance based on the maximum vertex link distance
                     double vertexLinkDistanceSqr = Options.VertexLinkDistance * Options.VertexLinkDistance;
                     double vertexLinkDistance = Options.VertexLinkDistance;
-                    int hashMaxDistance = System.Math.Max((int)((vertexLinkDistance / borderAreaWidth) * int.MaxValue), 1);
+                    int hashMaxDistance = System.Math.Max((int)((vertexLinkDistance / areaWidth) * int.MaxValue), 1);
 
-                    // Then find identical border vertices and bind them together as one
-                    for (int i = 0; i < borderIndexCount; i++)
+                    var absorbed = new bool[vertexCount];
+
+                    for (int qi = 0; qi < borderIndexCount; qi++)
                     {
-                        int myIndex = borderVertices[i].index;
-                        if (myIndex == -1)
+                        int queryIndex = borderVertices[qi].index;
+                        if (absorbed[queryIndex] || !vertices[queryIndex].border)
+                            continue; // already resolved by an earlier weld in this loop
+
+                        var queryPoint = vertices[queryIndex].p;
+                        int queryHash = borderVertices[qi].hash;
+
+                        // Binary search for the first entry with hash >= queryHash.
+                        int lo = 0, hi = allVertices.Length;
+                        while (lo < hi)
+                        {
+                            int mid = (lo + hi) / 2;
+                            if (allVertices[mid].hash < queryHash) lo = mid + 1;
+                            else hi = mid;
+                        }
+
+                        int bestMatch = -1;
+                        double bestSqrDist = vertexLinkDistanceSqr;
+
+                        // Scan outward in both directions while candidates stay within hash range.
+                        for (int dir = -1; dir <= 1; dir += 2)
+                        {
+                            int idx = (dir < 0) ? lo - 1 : lo;
+                            while (idx >= 0 && idx < allVertices.Length)
+                            {
+                                int candHash = allVertices[idx].hash;
+                                if (System.Math.Abs((long)candHash - queryHash) > hashMaxDistance)
+                                    break;
+
+                                int candIndex = allVertices[idx].index;
+                                idx += dir;
+
+                                if (candIndex == queryIndex || absorbed[candIndex])
+                                    continue;
+
+                                var candPoint = vertices[candIndex].p;
+                                var dx = queryPoint.x - candPoint.x;
+                                var dy = queryPoint.y - candPoint.y;
+                                var dz = queryPoint.z - candPoint.z;
+                                var sqrDist = dx * dx + dy * dy + dz * dz;
+
+                                // On a tie (common here: several duplicate-position fragments
+                                // can all sit at the exact same point), prefer the candidate
+                                // with more triangles of its own -- i.e. reconnect toward the
+                                // most established/well-connected point, rather than merging
+                                // two disconnected fragments into each other and leaving both
+                                // still detached from the main surface.
+                                bool better = sqrDist < bestSqrDist ||
+                                    (sqrDist == bestSqrDist && (bestMatch == -1 || vertices[candIndex].tcount > vertices[bestMatch].tcount));
+                                if (better)
+                                {
+                                    bestSqrDist = sqrDist;
+                                    bestMatch = candIndex;
+                                }
+                            }
+                        }
+
+                        if (bestMatch == -1)
                             continue;
 
-                        var myPoint = vertices[myIndex].p;
-                        for (int j = i + 1; j < borderIndexCount; j++)
+                        // Merge the smaller-degree vertex into the larger-degree one, so a small
+                        // isolated fragment reconnects into the main surface (rather than the
+                        // main surface's vertex being relabeled to the fragment's).
+                        bool matchIsBigger = vertices[bestMatch].tcount >= vertices[queryIndex].tcount;
+                        int survivor = matchIsBigger ? bestMatch : queryIndex;
+                        int victim = matchIsBigger ? queryIndex : bestMatch;
+
+                        absorbed[victim] = true;
+
+                        // Decide whether this is a genuine UV seam (preserve each side's own
+                        // attribute/UV in the output, as before) or a degenerate, disconnected
+                        // fragment that should be permanently folded into the main surface.
+                        //
+                        // Whether the survivor happens to already be flagged border is NOT a
+                        // reliable signal here: a vertex whose own local fan is missing exactly
+                        // the wedge a disconnected fragment should fill is *itself* flagged
+                        // border too (that's the same defect showing up from the other side),
+                        // so both sides of a bogus split can look like a legitimate seam pair.
+                        // A real seam runs along an extended edge, so its vertices normally
+                        // still have multiple triangles on their own side; a disconnected
+                        // fragment introduced by mismatched source data is typically a single
+                        // isolated triangle (or a tiny handful) with almost no connections of
+                        // its own. That triangle count is the reliable signal.
+                        const int FragmentTriangleThreshold = 2;
+                        bool victimIsDegenerateFragment = vertices[victim].tcount <= FragmentTriangleThreshold;
+                        bool isSeamStyleMerge = !victimIsDegenerateFragment;
+                        if (isSeamStyleMerge)
                         {
-                            int otherIndex = borderVertices[j].index;
-                            if (otherIndex == -1)
-                                continue;
-                            else if ((borderVertices[j].hash - borderVertices[i].hash) > hashMaxDistance) // There is no point to continue beyond this point
-                                break;
-
-                            var otherPoint = vertices[otherIndex].p;
-                            var sqrX = ((myPoint.x - otherPoint.x) * (myPoint.x - otherPoint.x));
-                            var sqrY = ((myPoint.y - otherPoint.y) * (myPoint.y - otherPoint.y));
-                            var sqrZ = ((myPoint.z - otherPoint.z) * (myPoint.z - otherPoint.z));
-                            var sqrMagnitude = sqrX + sqrY + sqrZ;
-
-                            if (sqrMagnitude <= vertexLinkDistanceSqr)
+                            if (AreUVsTheSame(0, survivor, victim))
                             {
-                                borderVertices[j].index = -1; // NOTE: This makes sure that the "other" vertex is not processed again
-                                vertices[myIndex].border = false;
-                                vertices[otherIndex].border = false;
+                                vertices[survivor].foldover = true;
+                                vertices[victim].foldover = true;
+                            }
+                            else
+                            {
+                                vertices[survivor].seam = true;
+                                vertices[victim].seam = true;
+                            }
+                        }
 
-                                if (AreUVsTheSame(0, myIndex, otherIndex))
-                                {
-                                    vertices[myIndex].foldover = true;
-                                    vertices[otherIndex].foldover = true;
-                                }
-                                else
-                                {
-                                    vertices[myIndex].seam = true;
-                                    vertices[otherIndex].seam = true;
-                                }
+                        vertices[survivor].border = false;
+                        vertices[victim].border = false;
 
-                                int otherTriangleCount = vertices[otherIndex].tcount;
-                                int otherTriangleStart = vertices[otherIndex].tstart;
-                                for (int k = 0; k < otherTriangleCount; k++)
-                                {
-                                    var r = refs[otherTriangleStart + k];
-                                    triangles[r.tid][r.tvertex] = myIndex;
-                                }
+                        int victimTriangleCount = vertices[victim].tcount;
+                        int victimTriangleStart = vertices[victim].tstart;
+                        for (int k = 0; k < victimTriangleCount; k++)
+                        {
+                            var r = refs[victimTriangleStart + k];
+                            triangles[r.tid][r.tvertex] = survivor;
+
+                            // For a genuine seam we deliberately leave each triangle's own
+                            // attribute (UV) index untouched, so CompactMesh's later
+                            // va/v reconciliation still splits the two sides back apart and
+                            // preserves their distinct UVs. For the asymmetric case (victim
+                            // was a disconnected fragment, survivor is an ordinary mesh
+                            // vertex) that reconciliation would instead re-isolate the
+                            // fragment right back into its own orphan slot, recreating the
+                            // exact defect this weld exists to fix -- so here we also adopt
+                            // the survivor's own attribute index, permanently folding the
+                            // fragment into the main surface.
+                            if (!isSeamStyleMerge)
+                            {
+                                triangles[r.tid].SetAttributeIndex(r.tvertex, survivor);
                             }
                         }
                     }
