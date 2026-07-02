@@ -103,6 +103,7 @@ public static partial class StagesFacade
         };
 
         var destMesh = MeshDecimation.DecimateMesh(algorithm, sourceMesh, targetTriangleCount);
+        MeshHoleRepair.CloseSingleTriangleHoles(destMesh);
         stopwatch.Stop();
 
         var destVertices = destMesh.Vertices;
