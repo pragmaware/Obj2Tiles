@@ -95,6 +95,7 @@ public static partial class StagesFacade
                 EnableSmartLink = true,
                 PreserveUVSeamEdges = false,
                 PreserveBorderEdges = quality > 0.2f,
+                PreserveUVFoldoverEdges = false,
                 PreserveSurfaceCurvature = true,
                 Aggressiveness = 7.0,
                 MaxIterationCount = 100,

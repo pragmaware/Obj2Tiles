@@ -28,14 +28,22 @@ namespace MeshDecimatorCore
         public bool PreserveBorderEdges;
 
         /// <summary>
-        /// If enabled, UV seam edges will not be collapsed,
-        /// preventing texture discontinuity artifacts.
+        /// If enabled, UV seam edges will not be collapsed, preventing texture
+        /// discontinuity artifacts.
+        /// An UV seam edge is a border edge that is duplicated in two distinct
+        /// triangles with different UV coordinates (cut for texturing purposes).
+        /// This is relevant only if EnableSmarkLink is set to true.
+        /// If EnableSmartLink is set to false the UV seam edges are always treated as boders.
         /// Default value: false
         /// </summary>
         public bool PreserveUVSeamEdges;
 
         /// <summary>
         /// If enabled, UV foldover edges will not be collapsed.
+        /// An UV foldover edge is a border edge that is duplicated in two distinct
+        /// triangles with same UV coordinates (likely normal-related vertex duplication).
+        /// This is relevant only if EnableSmarkLink is set to true.
+        /// If EnableSmartLink is set to false the UV foldover edges are always treated as boders.
         /// Default value: false
         /// </summary>
         public bool PreserveUVFoldoverEdges;
