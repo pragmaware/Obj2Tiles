@@ -24,6 +24,9 @@ public sealed class Options
     [Option('l', "lods", Required = false, HelpText = "How many levels of details", Default = 3)]
     public int LODs { get; set; }
 
+    [Option('m', "decimation-mode", Required = false, HelpText = "Decimation mode: Aggressive (max reduction, may distort UV seams), Standard (usually good results, may have distortions in certain cases), or Quality (best results but slower and less vertex reduction)", Default = DecimationMode.Standard)]
+    public DecimationMode DecimationMode { get; set; } = DecimationMode.Standard;
+
     [Option('k', "keeptextures", Required = false, HelpText = "Keeps original textures", Default = false)]
     public bool KeepOriginalTextures { get; set; }
 
