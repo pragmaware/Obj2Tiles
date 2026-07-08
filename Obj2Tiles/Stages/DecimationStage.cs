@@ -114,14 +114,19 @@ public static partial class StagesFacade
                 preserveUVSeamEdges = false;
                 preserveUVFoldoverEdges = false;
                 preserveBorderEdges = true;
+                // Less aggressive, more steps - slower but possibly slightly better
                 aggressiveness = 5.0;
                 maxIterations = 200;
                 break;
             case DecimationMode.Standard:
             default:
                 enableSmartLink = true;
-                preserveUVSeamEdges = hasTextures || quality > 0.2f;
-                preserveUVFoldoverEdges = hasTextures || quality > 0.2f;
+                // With textures we should almost always preserve UV-seams and UV-foldovers
+                // as not doing so will generate visible distortion.
+                // Without textures the distortion effect is only related to normals
+                // and is usually milder, so we can tolerate it when quality is low.
+                preserveUVSeamEdges = hasTextures || quality > 0.5f;
+                preserveUVFoldoverEdges = hasTextures || quality > 0.5f;
                 preserveBorderEdges = quality > 0.2f;
                 aggressiveness = 7.0;
                 maxIterations = 100;
