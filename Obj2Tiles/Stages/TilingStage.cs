@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using System.Linq;
 using Newtonsoft.Json;
 using Obj2Tiles.Library.Geometry;
 using Obj2Tiles.Stages.Model;
@@ -11,8 +12,9 @@ namespace Obj2Tiles.Stages;
 
 public static partial class StagesFacade
 {
-    public static void Tile(string sourcePath, string destPath, int lods, double baseError, Dictionary<string, Box3>[] boundsMapper,
-        GpsCoords? coords = null, bool localMode = false, bool isOctree = false)
+    public static void Tile(string sourcePath, string destPath, int lods, double? baseError, Dictionary<string, TileBounds>[] boundsMapper,
+        GpsCoords? coords = null, bool localMode = false, bool isOctree = false,
+        ErrorEstimationMode errorEstimationMode = ErrorEstimationMode.AverageEdgeLength, double? errorFactor = null)
     {
 
         Console.WriteLine(" ?> Working on objs conversion");
@@ -44,14 +46,25 @@ public static partial class StagesFacade
             rootTransform = coords.ToEcefTransform();
         }
 
+        var errorFactorValue = ResolveErrorFactor(errorEstimationMode, errorFactor);
+        var isToplevel = IsToplevelMode(errorEstimationMode);
+
+        // If no --error was passed, derive the root's geometric error from the coarsest LOD using the
+        // chosen mode's metric (bounding-box diagonal, or average/maximum triangle edge length), so it
+        // scales with the actual mesh size and detail instead of relying on a fixed default like 100.
+        var rootGeometricError = baseError ?? EstimateRootMetric(boundsMapper, errorEstimationMode) * errorFactorValue;
+
+        if (baseError == null)
+            Console.WriteLine($" ?> No --error provided, auto-computed root geometric error: {rootGeometricError:0.00} ({errorEstimationMode}, factor {errorFactorValue})");
+
         // Generate tileset.json
         var tileset = new Tileset
         {
             Asset = new Asset { Version = "1.0" },
-            GeometricError = baseError,
+            GeometricError = rootGeometricError,
             Root = new TileElement
             {
-                GeometricError = baseError,
+                GeometricError = rootGeometricError,
                 Refine = "ADD",
                 Transform = rootTransform,
             }
@@ -88,8 +101,10 @@ public static partial class StagesFacade
             // Process coarsest → finest so parents exist in tileMap before their children are added
             for (var lod = lods - 1; lod >= 0; lod--)
             {
-                foreach (var (descriptor, box3) in boundsMapper[lod])
+                foreach (var (descriptor, tileBounds) in boundsMapper[lod])
                 {
+                    var box3 = tileBounds.Box;
+
                     if (box3.Min.X < minX) minX = box3.Min.X;
                     if (box3.Max.X > maxX) maxX = box3.Max.X;
                     if (box3.Min.Y < minY) minY = box3.Min.Y;
@@ -99,9 +114,10 @@ public static partial class StagesFacade
 
                     var tile = new TileElement
                     {
-                        // Coarser tiles have larger geometric error (seen from farther away);
-                        // finest tiles are leaves with error = 0.
-                        GeometricError = lod == 0 ? 0 : baseError / Math.Pow(2, lods - lod),
+                        // Leaves (lod == 0) are the finest representation, so they carry no further error.
+                        GeometricError = lod == 0 ? 0 : isToplevel
+                            ? rootGeometricError / Math.Pow(2, lods - lod)
+                            : EstimateGeometricError(tileBounds, errorEstimationMode, errorFactorValue),
                         Refine = "REPLACE",
                         Content = new Content
                         {
@@ -136,11 +152,11 @@ public static partial class StagesFacade
             {
                 var currentTileElement = tileset.Root;
 
-                var refBox = boundsMapper[0][descriptor];
-
                 for (var lod = lods - 1; lod >= 0; lod--)
                 {
-                    if (!boundsMapper[lod].TryGetValue(descriptor, out var box3)) continue;
+                    if (!boundsMapper[lod].TryGetValue(descriptor, out var tileBounds)) continue;
+
+                    var box3 = tileBounds.Box;
 
                     if (box3.Min.X < minX) minX = box3.Min.X;
                     if (box3.Max.X > maxX) maxX = box3.Max.X;
@@ -151,7 +167,9 @@ public static partial class StagesFacade
 
                     var tile = new TileElement
                     {
-                        GeometricError = lod == 0 ? 0 : CalculateGeometricError(refBox, box3, lod),
+                        GeometricError = lod == 0 ? 0 : isToplevel
+                            ? rootGeometricError / Math.Pow(2, lods - lod)
+                            : EstimateGeometricError(tileBounds, errorEstimationMode, errorFactorValue),
                         Refine = "REPLACE",
                         Content = new Content
                         {
@@ -175,16 +193,105 @@ public static partial class StagesFacade
             JsonConvert.SerializeObject(tileset, Formatting.Indented));
     }
 
-    // Calculate mesh geometric error
-    private static double CalculateGeometricError(Box3 refBox, Box3 box, int lod)
+    // Union of all per-tile bounding boxes across every LOD, giving the overall model extent
+    private static Box3 ComputeGlobalBounds(Dictionary<string, TileBounds>[] boundsMapper)
     {
+        var maxX = double.MinValue;
+        var minX = double.MaxValue;
+        var maxY = double.MinValue;
+        var minY = double.MaxValue;
+        var maxZ = double.MinValue;
+        var minZ = double.MaxValue;
 
-        var dW = Math.Abs(refBox.Width - box.Width) / box.Width + 1;
-        var dH = Math.Abs(refBox.Height - box.Height) / box.Height + 1;
-        var dD = Math.Abs(refBox.Depth - box.Depth) / box.Depth + 1;
+        foreach (var box in boundsMapper.SelectMany(lodMap => lodMap.Values).Select(tb => tb.Box))
+        {
+            if (box.Min.X < minX) minX = box.Min.X;
+            if (box.Max.X > maxX) maxX = box.Max.X;
+            if (box.Min.Y < minY) minY = box.Min.Y;
+            if (box.Max.Y > maxY) maxY = box.Max.Y;
+            if (box.Min.Z < minZ) minZ = box.Min.Z;
+            if (box.Max.Z > maxZ) maxZ = box.Max.Z;
+        }
 
-        return Math.Pow(dW + dH + dD, lod);
+        return new Box3(minX, minY, minZ, maxX, maxY, maxZ);
+    }
 
+    private static bool IsToplevelMode(ErrorEstimationMode mode) => mode is
+        ErrorEstimationMode.ToplevelBoundingBoxDiagonal or
+        ErrorEstimationMode.ToplevelAverageEdgeLength or
+        ErrorEstimationMode.ToplevelMaximumEdgeLength;
+
+    private static double ResolveErrorFactor(ErrorEstimationMode mode, double? errorFactor)
+    {
+        if (errorFactor.HasValue) return errorFactor.Value;
+
+        return mode switch
+        {
+            ErrorEstimationMode.BoundingBoxDiagonal or ErrorEstimationMode.ToplevelBoundingBoxDiagonal => 0.1,
+            ErrorEstimationMode.AverageEdgeLength or ErrorEstimationMode.ToplevelAverageEdgeLength => 0.5,
+            ErrorEstimationMode.MaximumEdgeLength or ErrorEstimationMode.ToplevelMaximumEdgeLength => 0.5,
+            _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, null)
+        };
+    }
+
+    // Below this many faces, an edge-length average/maximum isn't statistically meaningful (e.g. a
+    // single sliver triangle), so edge-length-based modes fall back to a bounding-box estimate instead.
+    private const int MinFacesForEdgeLengthEstimate = 4;
+
+    // Fixed factor used only for the degenerate-tile fallback above, independent of --error-factor
+    // (which is calibrated for the chosen mode's own metric, not for a diagonal-based substitute).
+    private const double DegenerateTileDiagonalFactor = 0.1;
+
+    // Per-tile geometric error, estimated directly from that tile's own mesh: average/maximum triangle
+    // edge length reflects the actual detail discarded by decimation, unlike bounding-box size which
+    // only reflects spatial footprint. Not used for Toplevel* modes, which cascade from the root instead.
+    private static double EstimateGeometricError(TileBounds tileBounds, ErrorEstimationMode mode, double factor)
+    {
+        if (mode is ErrorEstimationMode.AverageEdgeLength or ErrorEstimationMode.MaximumEdgeLength
+            && tileBounds.FacesCount < MinFacesForEdgeLengthEstimate)
+            return tileBounds.Box.Diagonal() * DegenerateTileDiagonalFactor;
+
+        return mode switch
+        {
+            ErrorEstimationMode.BoundingBoxDiagonal => tileBounds.Box.Diagonal() * factor,
+            ErrorEstimationMode.AverageEdgeLength => tileBounds.AverageEdgeLength * factor,
+            ErrorEstimationMode.MaximumEdgeLength => tileBounds.MaximumEdgeLength * factor,
+            _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Toplevel modes don't use per-tile estimation")
+        };
+    }
+
+    // Metric feeding the root/tileset geometric error, aggregated over the coarsest LOD (the tiles
+    // attached directly under the root) since that's the level structurally closest to it.
+    private static double EstimateRootMetric(Dictionary<string, TileBounds>[] boundsMapper, ErrorEstimationMode mode)
+    {
+        var coarsestLod = boundsMapper[^1].Values;
+
+        return mode switch
+        {
+            ErrorEstimationMode.BoundingBoxDiagonal or ErrorEstimationMode.ToplevelBoundingBoxDiagonal =>
+                ComputeGlobalBounds(boundsMapper).Diagonal(),
+            ErrorEstimationMode.AverageEdgeLength or ErrorEstimationMode.ToplevelAverageEdgeLength =>
+                WeightedAverageEdgeLength(coarsestLod),
+            ErrorEstimationMode.MaximumEdgeLength or ErrorEstimationMode.ToplevelMaximumEdgeLength =>
+                coarsestLod.Select(tb => tb.MaximumEdgeLength).DefaultIfEmpty(0).Max(),
+            _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, null)
+        };
+    }
+
+    // Face-count-weighted average edge length across a set of tiles, so tiles with more geometry
+    // contribute proportionally more to the aggregate than a plain per-tile average would.
+    private static double WeightedAverageEdgeLength(IEnumerable<TileBounds> tiles)
+    {
+        var totalFaces = 0L;
+        var weightedSum = 0.0;
+
+        foreach (var tb in tiles)
+        {
+            totalFaces += tb.FacesCount;
+            weightedSum += tb.AverageEdgeLength * tb.FacesCount;
+        }
+
+        return totalFaces == 0 ? 0 : weightedSum / totalFaces;
     }
 
     private static void ConvertAllB3dm(string sourcePath, string destPath, int lods)
@@ -220,4 +327,37 @@ public static partial class StagesFacade
         Longitude = 9.190277486808588
     };
 
+}
+
+/// <summary>
+/// How per-tile (and root) geometric error is estimated.
+/// </summary>
+public enum ErrorEstimationMode
+{
+    /// <summary>Each tile's error is its own bounding-box diagonal times --error-factor (default 0.1).</summary>
+    BoundingBoxDiagonal,
+
+    /// <summary>Each tile's error is its own average triangle edge length times --error-factor (default 0.5).</summary>
+    AverageEdgeLength,
+
+    /// <summary>Each tile's error is its own maximum triangle edge length times --error-factor (default 0.5).</summary>
+    MaximumEdgeLength,
+
+    /// <summary>
+    /// The root's error is the coarsest LOD's bounding-box diagonal times --error-factor (default 0.1);
+    /// every tile's error is then that root value halved once per LOD subdivision from the root.
+    /// </summary>
+    ToplevelBoundingBoxDiagonal,
+
+    /// <summary>
+    /// The root's error is the coarsest LOD's (face-weighted) average edge length times --error-factor
+    /// (default 0.5); every tile's error is then that root value halved once per LOD subdivision from the root.
+    /// </summary>
+    ToplevelAverageEdgeLength,
+
+    /// <summary>
+    /// The root's error is the coarsest LOD's maximum edge length times --error-factor (default 0.5);
+    /// every tile's error is then that root value halved once per LOD subdivision from the root.
+    /// </summary>
+    ToplevelMaximumEdgeLength
 }

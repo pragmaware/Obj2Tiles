@@ -1017,6 +1017,56 @@ public class MeshT : IMesh
         }
     }
 
+    public double AverageEdgeLength
+    {
+        get
+        {
+            if (_faces.Count == 0) return 0;
+
+            var total = 0.0;
+
+            for (var index = 0; index < _faces.Count; index++)
+            {
+                var f = _faces[index];
+                var a = _vertices[f.IndexA];
+                var b = _vertices[f.IndexB];
+                var c = _vertices[f.IndexC];
+
+                total += a.Distance(b) + b.Distance(c) + c.Distance(a);
+            }
+
+            return total / (_faces.Count * 3);
+        }
+    }
+
+    public double MaximumEdgeLength
+    {
+        get
+        {
+            if (_faces.Count == 0) return 0;
+
+            var max = 0.0;
+
+            for (var index = 0; index < _faces.Count; index++)
+            {
+                var f = _faces[index];
+                var a = _vertices[f.IndexA];
+                var b = _vertices[f.IndexB];
+                var c = _vertices[f.IndexC];
+
+                var ab = a.Distance(b);
+                var bc = b.Distance(c);
+                var ca = c.Distance(a);
+
+                if (ab > max) max = ab;
+                if (bc > max) max = bc;
+                if (ca > max) max = ca;
+            }
+
+            return max;
+        }
+    }
+
     public Vertex3 GetAverageOrientation()
     {
         double x = 0;

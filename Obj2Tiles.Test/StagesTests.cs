@@ -46,7 +46,7 @@ public class StagesTests
                 Bounds = new Box3(new Vertex3(bounds.Min.X, bounds.Min.Y, bounds.Min.Z),
                     new Vertex3(bounds.Max.X, bounds.Max.Y, bounds.Max.Z)),
                 Name = Path.GetFileNameWithoutExtension(file)
-            }).ToDictionary(item => item.Name, item => item.Bounds);
+            }).ToDictionary(item => item.Name, item => new TileBounds(item.Bounds, 0, 0, 0));
 
         StagesFacade.Tile("TestData/Tile1", testPath, 1, 100, [boundsMapper]);
 
@@ -315,7 +315,7 @@ public class StagesTests
                 Bounds = new Box3(new Vertex3(bounds.Min.X, bounds.Min.Y, bounds.Min.Z),
                     new Vertex3(bounds.Max.X, bounds.Max.Y, bounds.Max.Z)),
                 Name = Path.GetFileNameWithoutExtension(file)
-            }).ToDictionary(item => item.Name, item => item.Bounds);
+            }).ToDictionary(item => item.Name, item => new TileBounds(item.Bounds, 0, 0, 0));
 
         StagesFacade.Tile("TestData/Tile1", testPath, 1, 100, [boundsMapper], localMode: true);
 
@@ -341,7 +341,7 @@ public class StagesTests
                 Bounds = new Box3(new Vertex3(bounds.Min.X, bounds.Min.Y, bounds.Min.Z),
                     new Vertex3(bounds.Max.X, bounds.Max.Y, bounds.Max.Z)),
                 Name = Path.GetFileNameWithoutExtension(file)
-            }).ToDictionary(item => item.Name, item => item.Bounds);
+            }).ToDictionary(item => item.Name, item => new TileBounds(item.Bounds, 0, 0, 0));
 
         // Without localMode and without coords → default Milan coordinates → NOT identity
         StagesFacade.Tile("TestData/Tile1", testPath, 1, 100, [boundsMapper]);
@@ -377,8 +377,8 @@ public class StagesTests
         Tri("LOD-0", "Mesh-XL-XR");
         Tri("LOD-1", "Mesh-XL");
 
-        var lod0 = new Dictionary<string, Box3> { ["Mesh-XL-XR"] = new Box3(0, 0, 0, 1, 1, 1) };
-        var lod1 = new Dictionary<string, Box3> { ["Mesh-XL"] = new Box3(0, 0, 0, 2, 2, 2) };
+        var lod0 = new Dictionary<string, TileBounds> { ["Mesh-XL-XR"] = new TileBounds(new Box3(0, 0, 0, 1, 1, 1), 0, 0, 0) };
+        var lod1 = new Dictionary<string, TileBounds> { ["Mesh-XL"] = new TileBounds(new Box3(0, 0, 0, 2, 2, 2), 0, 0, 0) };
 
         StagesFacade.Tile(src, testPath, 2, 100, [lod0, lod1], localMode: true, isOctree: true);
 

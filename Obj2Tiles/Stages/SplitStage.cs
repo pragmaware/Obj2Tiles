@@ -7,11 +7,11 @@ namespace Obj2Tiles.Stages;
 
 public static partial class StagesFacade
 {
-    public static async Task<Dictionary<string, Box3>[]> Split(string[] sourceFiles, string destFolder, int divisions,
+    public static async Task<Dictionary<string, TileBounds>[]> Split(string[] sourceFiles, string destFolder, int divisions,
         bool zsplit, bool keepOriginalTextures = false, SplitPointStrategy splitPointStrategy = SplitPointStrategy.VertexBaricenter,
         bool isOctree = false, float lodTextureScale = 1.0f)
     {
-        var results = new Dictionary<string, Box3>[sourceFiles.Length];
+        var results = new Dictionary<string, TileBounds>[sourceFiles.Length];
 
         // In octree mode, LOD-0 (finest) gets the most divisions; the split plan must cover that maximum depth.
         int maxDivisions = isOctree ? divisions + sourceFiles.Length - 1 : divisions;
@@ -64,7 +64,7 @@ public static partial class StagesFacade
 
         // Split all LODs in parallel using the pre-computed split plan.
         // In octree mode, the finest LOD (index=0) gets the most divisions; each coarser LOD gets one fewer.
-        var tasks = new List<Task<Dictionary<string, Box3>>>();
+        var tasks = new List<Task<Dictionary<string, TileBounds>>>();
         for (var index = 0; index < sourceFiles.Length; index++)
         {
             var file = sourceFiles[index];
@@ -87,7 +87,7 @@ public static partial class StagesFacade
         return results;
     }
 
-    public static async Task<Dictionary<string, Box3>> Split(string sourcePath, string destPath, int divisions,
+    public static async Task<Dictionary<string, TileBounds>> Split(string sourcePath, string destPath, int divisions,
         bool zSplit = false,
         Box3? bounds = null,
         TexturesStrategy textureStrategy = TexturesStrategy.Repack,
@@ -104,7 +104,7 @@ public static partial class StagesFacade
         return await Split(sourcePath, destPath, divisions, zSplit, textureStrategy, splitPointStrategy, getSplitPoint);
     }
 
-    private static async Task<Dictionary<string, Box3>> Split(string sourcePath, string destPath, int divisions,
+    private static async Task<Dictionary<string, TileBounds>> Split(string sourcePath, string destPath, int divisions,
         bool zSplit,
         TexturesStrategy textureStrategy,
         SplitPointStrategy splitPointStrategy,
@@ -112,7 +112,7 @@ public static partial class StagesFacade
         float textureDownscale = 1.0f)
     {
         var sw = new Stopwatch();
-        var tilesBounds = new Dictionary<string, Box3>();
+        var tilesBounds = new Dictionary<string, TileBounds>();
 
         Directory.CreateDirectory(destPath);
 
@@ -133,7 +133,10 @@ public static partial class StagesFacade
 
             mesh.WriteObj(Path.Combine(destPath, $"{mesh.Name}.obj"));
 
-            return new Dictionary<string, Box3> { { mesh.Name, mesh.Bounds } };
+            return new Dictionary<string, TileBounds>
+            {
+                { mesh.Name, new TileBounds(mesh.Bounds, mesh.AverageEdgeLength, mesh.MaximumEdgeLength, mesh.FacesCount) }
+            };
 
         }
 
@@ -171,7 +174,7 @@ public static partial class StagesFacade
         sw.Restart();
 
         var ms = meshes.ToArray();
-        var boundsMap = new ConcurrentDictionary<string, Box3>();
+        var boundsMap = new ConcurrentDictionary<string, TileBounds>();
         var progress = 0;
         var lodName = Path.GetFileName(destPath);
 
@@ -192,7 +195,7 @@ public static partial class StagesFacade
             m.WriteObj(tilePath);
             Console.WriteLine($" ?> [{m.DebugName}] Done in {sw.ElapsedMilliseconds - tileStart}ms");
 
-            boundsMap[m.Name] = m.Bounds;
+            boundsMap[m.Name] = new TileBounds(m.Bounds, m.AverageEdgeLength, m.MaximumEdgeLength, m.FacesCount);
         });
 
         foreach (var kv in boundsMap)

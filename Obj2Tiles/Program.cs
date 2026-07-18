@@ -93,14 +93,17 @@ namespace Obj2Tiles
                 var baseError = opts.BaseError;
 
                 Console.WriteLine();
-                Console.WriteLine($" => Tiling stage with baseError {baseError}");
+                Console.WriteLine(baseError.HasValue
+                    ? $" => Tiling stage with baseError {baseError}"
+                    : $" => Tiling stage with auto-computed baseError ({opts.ErrorEstimationMode})");
 
                 sw.Restart();
 
                 if (opts.LocalMode && (opts.Latitude != null || opts.Longitude != null))
                     Console.WriteLine(" !> Warning: --local overrides --lat/--lon. ECEF transform will not be applied.");
 
-                StagesFacade.Tile(destFolderSplit, opts.Output, opts.LODs, opts.BaseError, boundsMapper, gpsCoords, opts.LocalMode, opts.Octree);
+                StagesFacade.Tile(destFolderSplit, opts.Output, opts.LODs, opts.BaseError, boundsMapper, gpsCoords, opts.LocalMode, opts.Octree,
+                    opts.ErrorEstimationMode, opts.ErrorFactor);
 
                 Console.WriteLine(" ?> Tiling stage done in {0}", sw.Elapsed);
             }

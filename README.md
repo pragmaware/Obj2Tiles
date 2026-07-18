@@ -69,7 +69,9 @@ Obj2Tiles [options] <input.obj> <output-folder>
 
 | Parameter | Default | Description | Example |
 |-----------|---------|-------------|---------|
-| `-e, --error` | `100` | Base geometric error value for the root tile in `tileset.json` | `--error 500` |
+| `-e, --error` |  | Base geometric error value for the root tile in `tileset.json`. If omitted, it's auto-computed from the coarsest LOD via `--error-estimation-mode`/`--error-factor` | `--error 500` |
+| `--error-estimation-mode` | `AverageEdgeLength` | How geometric error is estimated: `BoundingBoxDiagonal`, `AverageEdgeLength`, `MaximumEdgeLength` compute each tile's error from that tile's own geometry (bounding-box diagonal, or average/maximum triangle edge length, times `--error-factor`). Below 4 faces, `AverageEdgeLength`/`MaximumEdgeLength` fall back to `bounding-box diagonal * 0.1` since an edge-length estimate isn't meaningful. The `Toplevel*` variants instead compute one value at the root from the coarsest LOD using the same metric, then halve it once per LOD subdivision | `--error-estimation-mode MaximumEdgeLength` |
+| `--error-factor` | `0.1` (`*BoundingBoxDiagonal`) / `0.5` (`*AverageEdgeLength`, `*MaximumEdgeLength`) | Multiplier applied to the metric selected by `--error-estimation-mode` | `--error-factor 0.3` |
 | `--use-system-temp` | `false` | Use the system temp folder for intermediate files instead of the output folder | `--use-system-temp` |
 | `--keep-intermediate` | `false` | Keep intermediate files (decimated OBJs, split tiles) for debugging | `--keep-intermediate` |
 | `--help` |  | Display help screen | `--help` |
