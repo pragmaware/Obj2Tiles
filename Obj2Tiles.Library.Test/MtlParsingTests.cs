@@ -202,4 +202,49 @@ public class MtlParsingTests
         finally { Directory.Delete(dir, true); }
     }
 
+    // --- Normal map keyword aliases ---
+
+    [TestCase("norm")]
+    [TestCase("bump")]
+    [TestCase("map_Bump")]
+    [TestCase("map_bump")]
+    public void ReadMtl_NormalMapKeywordAliases_ParseIntoNormalMap(string keyword)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "n.png"), "x");
+            var mtl = Path.Combine(dir, "m.mtl");
+            File.WriteAllText(mtl, $"newmtl X\n{keyword} n.png\n");
+            var materials = Material.ReadMtl(mtl, out var deps);
+            materials[0].NormalMap.ShouldNotBeNull();
+            materials[0].NormalMap!.EndsWith("n.png").ShouldBeTrue();
+            deps.Length.ShouldBe(1);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Test]
+    public void ReadMtl_ToMtl_NormalMapRoundTrip()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "n.png"), "x");
+            var mtl = Path.Combine(dir, "m.mtl");
+            File.WriteAllText(mtl, "newmtl X\nbump n.png\n");
+            var materials = Material.ReadMtl(mtl, out _);
+
+            var rewritten = Path.Combine(dir, "rewritten.mtl");
+            File.WriteAllText(rewritten, materials[0].ToMtl());
+
+            var reread = Material.ReadMtl(rewritten, out _);
+            reread[0].NormalMap.ShouldNotBeNull();
+            reread[0].NormalMap!.EndsWith("n.png").ShouldBeTrue();
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
 }

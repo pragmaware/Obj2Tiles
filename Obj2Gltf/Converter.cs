@@ -398,7 +398,7 @@ namespace SilentWave.Obj2Gltf
                     ? objModel.Materials.FirstOrDefault(m => m.Name == f.MatName)
                       ?? (materialIndex < objModel.Materials.Count ? objModel.Materials[materialIndex] : null)
                     : objModel.Materials.FirstOrDefault();
-                var materialHasTexture = material?.DiffuseTextureFile != null;
+                var materialHasTexture = material?.DiffuseTextureFile != null || material?.NormalTextureFile != null;
 
                 // every primitive needs their own vertex indices(v,t,n)
                 var faceVertexCache = new Dictionary<string, int>();
@@ -428,6 +428,10 @@ namespace SilentWave.Obj2Gltf
                         if (gMat.PbrMetallicRoughness.BaseColorTexture != null)
                         {
                             gMat.PbrMetallicRoughness.BaseColorTexture = null;
+                        }
+                        if (gMat.normalTexture != null)
+                        {
+                            gMat.normalTexture = null;
                         }
                     }
                 }

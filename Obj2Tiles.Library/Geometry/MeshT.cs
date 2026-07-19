@@ -725,9 +725,10 @@ public class MeshT : IMesh
 
         if (material.NormalMap != null)
         {
-            normalMapFileName = TexturesStrategy == TexturesStrategy.Repack
-                ? $"{Name}-texture-normal-{material.Name}{Path.GetExtension(material.NormalMap)}"
-                : $"{Name}-texture-normal-{material.Name}.jpg";
+            // Normal maps are always saved losslessly (PNG): JPEG chroma subsampling
+            // corrupts the directional data encoded in the RGB channels, producing
+            // visible lighting artifacts even though the diffuse texture tolerates it fine.
+            normalMapFileName = $"{Name}-texture-normal-{material.Name}.png";
             newPathNormalMap = Path.Combine(targetFolder, normalMapFileName);
         }
 
@@ -748,8 +749,10 @@ public class MeshT : IMesh
             var tx = (Image<Rgba32>)t!;
             switch (TexturesStrategy)
             {
-                case TexturesStrategy.RepackCompressed: tx.SaveAsJpeg(newPathNormalMap!, encoder); break;
-                case TexturesStrategy.Repack: tx.Save(newPathNormalMap!); break;
+                case TexturesStrategy.RepackCompressed:
+                case TexturesStrategy.Repack:
+                    tx.Save(newPathNormalMap!); // always lossless, see comment above
+                    break;
                 default: throw new InvalidOperationException("KeepOriginal/Compress are meaningless here");
             }
             tx.Dispose();
@@ -1443,6 +1446,55 @@ public class MeshT : IMesh
                                 }
 
                                 material.Texture = textureFileName;
+                                break;
+                            }
+                    }
+                }
+
+                if (material.NormalMap != null)
+                {
+                    switch (TexturesStrategy)
+                    {
+                        case TexturesStrategy.KeepOriginal:
+                            {
+                                var folder = Path.GetDirectoryName(path);
+
+                                var normalMapFileName =
+                                    $"{Path.GetFileNameWithoutExtension(path)}-normalmap-{index}{Path.GetExtension(material.NormalMap)}";
+
+                                var newNormalMapPath =
+                                    folder != null ? Path.Combine(folder, normalMapFileName) : normalMapFileName;
+
+                                if (!File.Exists(newNormalMapPath))
+                                    File.Copy(material.NormalMap, newNormalMapPath, true);
+
+                                material.NormalMap = normalMapFileName;
+                                break;
+                            }
+                        case TexturesStrategy.Compress:
+                            {
+                                // Normal maps stay lossless (PNG) even under the "compress" strategy:
+                                // JPEG chroma subsampling corrupts the directional data encoded in
+                                // the RGB channels, producing visible lighting artifacts.
+                                var folder = Path.GetDirectoryName(path);
+
+                                var normalMapFileName =
+                                    $"{Path.GetFileNameWithoutExtension(path)}-normalmap-{index}.png";
+
+                                var newNormalMapPath =
+                                    folder != null ? Path.Combine(folder, normalMapFileName) : normalMapFileName;
+
+                                if (File.Exists(newNormalMapPath))
+                                    File.Delete(newNormalMapPath);
+
+                                Console.WriteLine($" -> Copying normal map '{material.NormalMap}'");
+
+                                using (var image = Image.Load(material.NormalMap))
+                                {
+                                    image.SaveAsPng(newNormalMapPath);
+                                }
+
+                                material.NormalMap = normalMapFileName;
                                 break;
                             }
                     }

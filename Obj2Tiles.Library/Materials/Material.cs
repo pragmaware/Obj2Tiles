@@ -183,6 +183,9 @@ public class Material : ICloneable
                     break;
                 }
                 case "norm":
+                case "bump":
+                case "map_Bump":
+                case "map_bump":
                 {
                     var texPath = ExtractTexturePath(remainder);
                     if (!string.IsNullOrEmpty(texPath))
