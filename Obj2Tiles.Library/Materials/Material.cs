@@ -49,6 +49,33 @@ public class Material : ICloneable
         return raw.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
     }
 
+    private static readonly string[] TextureSubfolderNames = { "texture", "textures", "tex" };
+
+    // Looks for a conventionally-named texture subfolder directly under parentFolder
+    // (case-insensitively, since assets are often authored on case-insensitive filesystems).
+    private static string? FindTextureSubfolder(string parentFolder)
+    {
+        foreach (var name in TextureSubfolderNames)
+        {
+            var candidate = Path.Combine(parentFolder, name);
+            if (Directory.Exists(candidate)) return candidate;
+        }
+
+        if (!Directory.Exists(parentFolder)) return null;
+
+        foreach (var dir in Directory.EnumerateDirectories(parentFolder))
+        {
+            var dirName = Path.GetFileName(dir);
+            foreach (var name in TextureSubfolderNames)
+            {
+                if (string.Equals(dirName, name, StringComparison.OrdinalIgnoreCase))
+                    return dir;
+            }
+        }
+
+        return null;
+    }
+
     // Tries to locate a texture file by progressively relaxing the base directory.
     // Returns the full absolute path on success, null if the file cannot be found.
     private static string? ResolvePath(string path, string mtlFolder, string objFolder)
@@ -79,6 +106,28 @@ public class Material : ICloneable
 
         candidate = Path.GetFullPath(path);
         if (File.Exists(candidate)) return candidate;
+
+        // Last resort: some asset sets keep textures in a conventionally-named
+        // subfolder ("texture"/"textures"/"tex") next to the MTL or OBJ, while
+        // the MTL itself references the file with no such prefix (or a different one).
+        var baseFolders = string.Equals(mtlFolder, objFolder, StringComparison.OrdinalIgnoreCase)
+            ? new[] { mtlFolder }
+            : new[] { mtlFolder, objFolder };
+
+        foreach (var baseFolder in baseFolders)
+        {
+            var subFolder = FindTextureSubfolder(baseFolder);
+            if (subFolder == null) continue;
+
+            candidate = Path.GetFullPath(Path.Combine(subFolder, path));
+            if (File.Exists(candidate)) return candidate;
+
+            if (fileName.Length < path.Length)
+            {
+                candidate = Path.GetFullPath(Path.Combine(subFolder, fileName));
+                if (File.Exists(candidate)) return candidate;
+            }
+        }
 
         return null;
     }

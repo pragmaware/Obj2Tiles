@@ -408,6 +408,28 @@ public class StagesTests
         File.Exists(Path.Combine(testPath, "evil.mtl")).ShouldBeFalse("traversal must not write outside output");
     }
 
+    [Test]
+    public void CopyObjDependencies_TextureInSubfolder_CopiesViaFallback()
+    {
+        var testPath = GetTestOutputPath(nameof(CopyObjDependencies_TextureInSubfolder_CopiesViaFallback));
+        var inDir = Path.Combine(testPath, "in");
+        var outDir = Path.Combine(testPath, "out");
+        var texDir = Path.Combine(inDir, "textures");
+        Directory.CreateDirectory(texDir);
+        Directory.CreateDirectory(outDir);
+
+        File.WriteAllText(Path.Combine(texDir, "diffuse.png"), "x");
+        File.WriteAllText(Path.Combine(inDir, "model.mtl"), "newmtl X\nmap_Kd diffuse.png\n");
+        File.WriteAllText(Path.Combine(inDir, "model.obj"), "mtllib model.mtl\n");
+
+        Obj2Tiles.Utils.CopyObjDependencies(Path.Combine(inDir, "model.obj"), outDir);
+
+        // The MTL references "diffuse.png" with no subfolder prefix, so the dependency
+        // is copied under that same relative name even though it was resolved from
+        // the "textures" subfolder fallback.
+        File.Exists(Path.Combine(outDir, "diffuse.png")).ShouldBeTrue();
+    }
+
     #endregion
 
 }

@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using System.Linq;
 using NUnit.Framework;
@@ -221,6 +222,52 @@ public class MtlParsingTests
             materials[0].NormalMap.ShouldNotBeNull();
             materials[0].NormalMap!.EndsWith("n.png").ShouldBeTrue();
             deps.Length.ShouldBe(1);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    // --- Texture subfolder fallback ---
+
+    [TestCase("texture")]
+    [TestCase("textures")]
+    [TestCase("tex")]
+    [TestCase("Textures")] // case-insensitive match
+    public void ReadMtl_TextureInSubfolder_ResolvesViaFallback(string subfolderName)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var subDir = Path.Combine(dir, subfolderName);
+            Directory.CreateDirectory(subDir);
+            File.WriteAllText(Path.Combine(subDir, "diffuse.png"), "x");
+
+            var mtl = Path.Combine(dir, "m.mtl");
+            // MTL references the bare filename; the actual file only exists under the subfolder.
+            File.WriteAllText(mtl, "newmtl X\nmap_Kd diffuse.png\n");
+
+            var materials = Material.ReadMtl(mtl, out var deps);
+            materials[0].Texture.ShouldNotBeNull();
+            materials[0].Texture!.EndsWith("diffuse.png").ShouldBeTrue();
+            Path.GetDirectoryName(materials[0].Texture)!.EndsWith(subfolderName, StringComparison.OrdinalIgnoreCase).ShouldBeTrue();
+            deps.Length.ShouldBe(1);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Test]
+    public void ReadMtl_TextureNotFoundAnywhere_TextureStaysNull()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var mtl = Path.Combine(dir, "m.mtl");
+            File.WriteAllText(mtl, "newmtl X\nmap_Kd missing.png\n");
+
+            var materials = Material.ReadMtl(mtl, out var deps);
+            materials[0].Texture.ShouldBeNull();
+            deps.Length.ShouldBe(0);
         }
         finally { Directory.Delete(dir, true); }
     }
