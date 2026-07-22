@@ -15,11 +15,17 @@ public sealed class Options
     [Option('s', "stage", Required = false, HelpText = "Stage to stop at (Decimation, Splitting, Tiling)", Default = Stage.Tiling)]
     public Stage StopAt { get; set; }
 
+    [Option('p', "preset", Required = false, HelpText = "Applies a bundle of option defaults. 'legacy' sets --no-zsplit --no-octree --lod-texture-scale 1.0. 'standard' sets --octree --local --zsplit --lod-texture-scale 0.5 --decimation-mode Quality. Any of these options given explicitly on the command line take precedence over the preset.", Default = Preset.None)]
+    public Preset Preset { get; set; }
+
     [Option('d', "divisions", Required = false, HelpText = "How many tiles divisions", Default = 2)]
     public int Divisions { get; set; }
 
     [Option('z', "zsplit", Required = false, HelpText = "Splits along z-axis too", Default = false)]
     public bool ZSplit { get; set; }
+
+    [Option("no-zsplit", Required = false, HelpText = "Disables z-axis splitting, overriding --zsplit.", Default = false)]
+    public bool NoZSplit { get; set; }
 
     [Option('l', "lods", Required = false, HelpText = "How many levels of details", Default = 3)]
     public int LODs { get; set; }
@@ -69,8 +75,17 @@ public sealed class Options
     [Option("octree", Required = false, HelpText = "Use octree spatial subdivision: each LOD gets one additional division level relative to the next coarser LOD, producing a proper tile hierarchy instead of same-count tiles per LOD.", Default = false)]
     public bool Octree { get; set; }
 
-    [Option("lod-texture-scale", Required = false, HelpText = "Per-LOD texture downscale factor. LOD-0 always keeps full resolution; each subsequent LOD multiplies the previous resolution by this factor. E.g. 0.5 gives LOD-1 at 1/2 resolution, LOD-2 at 1/4, etc. Default 1.0 (no downscaling).", Default = 1.0)]
+    [Option("no-octree", Required = false, HelpText = "Disables octree spatial subdivision, overriding --octree.", Default = false)]
+    public bool NoOctree { get; set; }
+
+    [Option("lod-texture-scale", Required = false, HelpText = "Per-LOD texture downscale factor. LOD-0 always keeps full resolution; each subsequent LOD multiplies the previous resolution by this factor. E.g. 0.5 gives LOD-1 at 1/2 resolution, LOD-2 at 1/4, etc. Default 0.5.", Default = 0.5)]
     public double LodTextureScale { get; set; }
+
+    [JsonIgnore]
+    public bool EffectiveZSplit => ZSplit && !NoZSplit;
+
+    [JsonIgnore]
+    public bool EffectiveOctree => Octree && !NoOctree;
 }
 
 public enum Stage
@@ -78,4 +93,11 @@ public enum Stage
     Decimation,
     Splitting,
     Tiling
+}
+
+public enum Preset
+{
+    None,
+    Legacy,
+    Standard
 }

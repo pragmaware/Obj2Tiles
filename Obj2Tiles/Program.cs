@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
+using System.Linq;
 using System.Reflection;
 using CommandLine;
 using CommandLine.Text;
@@ -16,11 +17,42 @@ namespace Obj2Tiles
     {
         private static async Task Main(string[] args)
         {
-            var oResult = await Parser.Default.ParseArguments<Options>(args).WithParsedAsync(Run);
+            using var parser = new Parser(with => with.CaseInsensitiveEnumValues = true);
+
+            var oResult = await parser.ParseArguments<Options>(args).WithParsedAsync(opts =>
+            {
+                ApplyPreset(opts, args);
+                return Run(opts);
+            });
 
             if (oResult.Tag == ParserResultType.NotParsed)
             {
                 Console.WriteLine("Usage: obj2tiles [options]");
+            }
+        }
+
+        private static void ApplyPreset(Options opts, string[] args)
+        {
+            if (opts.Preset == Preset.None) return;
+
+            bool WasSpecified(params string[] flags) =>
+                args.Any(a => flags.Contains(a) || Array.Exists(flags, f => a.StartsWith(f + "=")));
+
+            switch (opts.Preset)
+            {
+                case Preset.Legacy:
+                    if (!WasSpecified("--no-zsplit")) opts.NoZSplit = true;
+                    if (!WasSpecified("--no-octree")) opts.NoOctree = true;
+                    if (!WasSpecified("--lod-texture-scale")) opts.LodTextureScale = 1.0;
+                    break;
+
+                case Preset.Standard:
+                    if (!WasSpecified("-z", "--zsplit")) opts.ZSplit = true;
+                    if (!WasSpecified("--octree")) opts.Octree = true;
+                    if (!WasSpecified("--local")) opts.LocalMode = true;
+                    if (!WasSpecified("--lod-texture-scale")) opts.LodTextureScale = 0.5;
+                    if (!WasSpecified("-m", "--decimation-mode")) opts.DecimationMode = DecimationMode.Quality;
+                    break;
             }
         }
 
@@ -67,7 +99,7 @@ namespace Obj2Tiles
 
                 Console.WriteLine();
                 Console.WriteLine(
-                    $" => Splitting stage with {opts.Divisions} divisions {(opts.ZSplit ? "and Z-split" : "")}");
+                    $" => Splitting stage with {opts.Divisions} divisions {(opts.EffectiveZSplit ? "and Z-split" : "")}");
 
                 destFolderSplit = opts.StopAt == Stage.Splitting
                     ? opts.Output
@@ -76,7 +108,7 @@ namespace Obj2Tiles
                 Console.WriteLine($" ?> Keep original textures: {opts.KeepOriginalTextures}, Split strategy: {opts.SplitPointStrategy}");
 
                 var boundsMapper = await StagesFacade.Split(decimateRes.DestFiles, destFolderSplit, opts.Divisions,
-                    opts.ZSplit, opts.KeepOriginalTextures, opts.SplitPointStrategy, opts.Octree, (float)opts.LodTextureScale);
+                    opts.EffectiveZSplit, opts.KeepOriginalTextures, opts.SplitPointStrategy, opts.EffectiveOctree, (float)opts.LodTextureScale);
 
                 Console.WriteLine(" ?> Splitting stage done in {0}", sw.Elapsed);
 
@@ -102,7 +134,7 @@ namespace Obj2Tiles
                 if (opts.LocalMode && (opts.Latitude != null || opts.Longitude != null))
                     Console.WriteLine(" !> Warning: --local overrides --lat/--lon. ECEF transform will not be applied.");
 
-                StagesFacade.Tile(destFolderSplit, opts.Output, opts.LODs, opts.BaseError, boundsMapper, gpsCoords, opts.LocalMode, opts.Octree,
+                StagesFacade.Tile(destFolderSplit, opts.Output, opts.LODs, opts.BaseError, boundsMapper, gpsCoords, opts.LocalMode, opts.EffectiveOctree,
                     opts.ErrorEstimationMode, opts.ErrorFactor);
 
                 Console.WriteLine(" ?> Tiling stage done in {0}", sw.Elapsed);
