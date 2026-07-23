@@ -76,7 +76,11 @@ public static partial class StagesFacade
             int lodDivisions = isOctree ? divisions + sourceFiles.Length - index - 1 : divisions;
             float textureDownscale = index == 0 ? 1.0f : (float)Math.Pow(lodTextureScale, index);
 
-            tasks.Add(Split(file, dest, lodDivisions, zsplit, textureStrategy, splitPointStrategy, replaySplitPoint, textureDownscale));
+            // LOD-0 is the finest, most-visible representation, so its JPEG re-encode should stay
+            // close to source quality; coarser LODs can afford more compression.
+            int jpegQuality = index == 0 ? 90 : 80;
+
+            tasks.Add(Split(file, dest, lodDivisions, zsplit, textureStrategy, splitPointStrategy, replaySplitPoint, textureDownscale, jpegQuality));
         }
 
         await Task.WhenAll(tasks);
@@ -109,7 +113,8 @@ public static partial class StagesFacade
         TexturesStrategy textureStrategy,
         SplitPointStrategy splitPointStrategy,
         Func<IMesh, Vertex3> getSplitPoint,
-        float textureDownscale = 1.0f)
+        float textureDownscale = 1.0f,
+        int jpegQuality = 75)
     {
         var sw = new Stopwatch();
         var tilesBounds = new Dictionary<string, TileBounds>();
@@ -129,7 +134,10 @@ public static partial class StagesFacade
             Console.WriteLine(" -> Skipping split stage, just compressing textures and cleaning up the mesh");
 
             if (mesh is MeshT t)
+            {
                 t.TexturesStrategy = TexturesStrategy.Compress;
+                t.JpegQuality = jpegQuality;
+            }
 
             mesh.WriteObj(Path.Combine(destPath, $"{mesh.Name}.obj"));
 
@@ -169,7 +177,7 @@ public static partial class StagesFacade
 
         Console.WriteLine(" -> Writing tiles");
         Console.WriteLine($" ?> Destination: {destPath}");
-        Console.WriteLine($" ?> Texture strategy: {textureStrategy}, Texture downscale: {textureDownscale:F3}");
+        Console.WriteLine($" ?> Texture strategy: {textureStrategy}, Texture downscale: {textureDownscale:F3}, JPEG quality: {jpegQuality}");
 
         sw.Restart();
 
@@ -187,6 +195,7 @@ public static partial class StagesFacade
             {
                 t.TexturesStrategy = textureStrategy;
                 t.TextureDownscale = textureDownscale;
+                t.JpegQuality = jpegQuality;
             }
 
             var tilePath = Path.Combine(destPath, $"{m.Name}.obj");

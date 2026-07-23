@@ -39,6 +39,12 @@ public class MeshT : IMesh
     /// </summary>
     public float TextureDownscale { get; set; } = 1.0f;
 
+    /// <summary>
+    /// Quality used whenever a diffuse texture is (re-)encoded as JPEG, regardless of
+    /// TexturesStrategy. Callers set this per LOD (e.g. higher for LOD-0, lower for coarser LODs).
+    /// </summary>
+    public int JpegQuality { get; set; } = 75;
+
     public MeshT(IEnumerable<Vertex3> vertices, IEnumerable<Vertex2> textureVertices,
         IEnumerable<FaceT> faces, IEnumerable<Material> materials, IEnumerable<RGB>? vertexColors = null)
     {
@@ -513,7 +519,7 @@ public class MeshT : IMesh
         });
     }
 
-    private static readonly JpegEncoder encoder = new JpegEncoder { Quality = 75 };
+    private static readonly string[] JpegExtensions = { ".jpg", ".jpeg" };
 
     private void BinPackTextures(string targetFolder, int materialIndex, IReadOnlyList<List<int>> clusters,
         IDictionary<Vertex2, int> newTextureVertices, ICollection<Task> tasks)
@@ -737,8 +743,15 @@ public class MeshT : IMesh
             var tx = (Image<Rgba32>)t!;
             switch (TexturesStrategy)
             {
-                case TexturesStrategy.RepackCompressed: tx.SaveAsJpeg(newPathTexture!, encoder); break;
-                case TexturesStrategy.Repack: tx.Save(newPathTexture!); break;
+                case TexturesStrategy.RepackCompressed:
+                    tx.SaveAsJpeg(newPathTexture!, new JpegEncoder { Quality = JpegQuality });
+                    break;
+                case TexturesStrategy.Repack:
+                    if (JpegExtensions.Contains(Path.GetExtension(newPathTexture!), StringComparer.OrdinalIgnoreCase))
+                        tx.SaveAsJpeg(newPathTexture!, new JpegEncoder { Quality = JpegQuality });
+                    else
+                        tx.Save(newPathTexture!);
+                    break;
                 default: throw new InvalidOperationException("KeepOriginal/Compress are meaningless here");
             }
             tx.Dispose();
@@ -1442,7 +1455,7 @@ public class MeshT : IMesh
 
                                 using (var image = Image.Load(material.Texture))
                                 {
-                                    image.SaveAsJpeg(newTexturePath, encoder);
+                                    image.SaveAsJpeg(newTexturePath, new JpegEncoder { Quality = JpegQuality });
                                 }
 
                                 material.Texture = textureFileName;
