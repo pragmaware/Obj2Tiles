@@ -14,12 +14,15 @@ public static partial class StagesFacade
 {
     public static void Tile(string sourcePath, string destPath, int lods, double? baseError, Dictionary<string, TileBounds>[] boundsMapper,
         GpsCoords? coords = null, bool localMode = false, bool isOctree = false,
-        ErrorEstimationMode errorEstimationMode = ErrorEstimationMode.AverageEdgeLength, double? errorFactor = null)
+        ErrorEstimationMode errorEstimationMode = ErrorEstimationMode.AverageEdgeLength, double? errorFactor = null,
+        bool useGlb = false)
     {
 
         Console.WriteLine(" ?> Working on objs conversion");
 
-        ConvertAllB3dm(sourcePath, destPath, lods);
+        var tileExtension = useGlb ? ".glb" : ".b3dm";
+
+        ConvertAllTiles(sourcePath, destPath, lods, useGlb);
 
         Console.WriteLine(" -> Generating tileset.json");
 
@@ -60,7 +63,8 @@ public static partial class StagesFacade
         // Generate tileset.json
         var tileset = new Tileset
         {
-            Asset = new Asset { Version = "1.0" },
+            // Plain glTF/GLB tile content requires 3D Tiles 1.1; b3dm-wrapped content stays on 1.0.
+            Asset = new Asset { Version = useGlb ? "1.1" : "1.0" },
             GeometricError = rootGeometricError,
             Root = new TileElement
             {
@@ -121,7 +125,7 @@ public static partial class StagesFacade
                         Refine = "REPLACE",
                         Content = new Content
                         {
-                            Uri = $"LOD-{lod}/{Path.GetFileNameWithoutExtension(descriptor)}.b3dm"
+                            Uri = $"LOD-{lod}/{Path.GetFileNameWithoutExtension(descriptor)}{tileExtension}"
                         },
                         BoundingVolume = box3.ToBoundingVolume()
                     };
@@ -173,7 +177,7 @@ public static partial class StagesFacade
                         Refine = "REPLACE",
                         Content = new Content
                         {
-                            Uri = $"LOD-{lod}/{Path.GetFileNameWithoutExtension(descriptor)}.b3dm"
+                            Uri = $"LOD-{lod}/{Path.GetFileNameWithoutExtension(descriptor)}{tileExtension}"
                         },
                         BoundingVolume = box3.ToBoundingVolume()
                     };
@@ -294,8 +298,9 @@ public static partial class StagesFacade
         return totalFaces == 0 ? 0 : weightedSum / totalFaces;
     }
 
-    private static void ConvertAllB3dm(string sourcePath, string destPath, int lods)
+    private static void ConvertAllTiles(string sourcePath, string destPath, int lods, bool useGlb)
     {
+        var tileExtension = useGlb ? ".glb" : ".b3dm";
         var filesToConvert = new List<Tuple<string, string>>();
 
         for (var lod = 0; lod < lods; lod++)
@@ -307,15 +312,19 @@ public static partial class StagesFacade
                 var outputFolder = Path.Combine(destPath, "LOD-" + lod);
                 Directory.CreateDirectory(outputFolder);
 
-                var outputFile = Path.Combine(outputFolder, Path.ChangeExtension(Path.GetFileName(file), ".b3dm"));
+                var outputFile = Path.Combine(outputFolder, Path.ChangeExtension(Path.GetFileName(file), tileExtension));
                 filesToConvert.Add(new Tuple<string, string>(file, outputFile));
             }
         }
 
         Parallel.ForEach(filesToConvert, (file) =>
         {
-            Console.WriteLine($" -> Converting to b3dm '{file.Item1}'");
-            Utils.ConvertB3dm(file.Item1, file.Item2);
+            Console.WriteLine($" -> Converting to {tileExtension.TrimStart('.')} '{file.Item1}'");
+
+            if (useGlb)
+                Utils.ConvertGlb(file.Item1, file.Item2);
+            else
+                Utils.ConvertB3dm(file.Item1, file.Item2);
         });
     }
 

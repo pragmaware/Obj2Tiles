@@ -116,7 +116,7 @@ public static partial class StagesFacade
                 preserveBorderEdges = true;
                 // Less aggressive, more steps - slower but possibly slightly better
                 aggressiveness = 5.0;
-                maxIterations = 200;
+                maxIterations = 300;
                 break;
             case DecimationMode.Standard:
             default:

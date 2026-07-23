@@ -17,7 +17,11 @@ namespace Obj2Tiles
     {
         private static async Task Main(string[] args)
         {
-            using var parser = new Parser(with => with.CaseInsensitiveEnumValues = true);
+            using var parser = new Parser(with =>
+            {
+                with.CaseInsensitiveEnumValues = true;
+                with.HelpWriter = Console.Out;
+            });
 
             var oResult = await parser.ParseArguments<Options>(args).WithParsedAsync(opts =>
             {
@@ -41,17 +45,27 @@ namespace Obj2Tiles
             switch (opts.Preset)
             {
                 case Preset.Legacy:
-                    if (!WasSpecified("--no-zsplit")) opts.NoZSplit = true;
-                    if (!WasSpecified("--no-octree")) opts.NoOctree = true;
-                    if (!WasSpecified("--lod-texture-scale")) opts.LodTextureScale = 1.0;
+                    if (!WasSpecified("--no-zsplit"))
+                        opts.NoZSplit = true;
+                    if (!WasSpecified("--no-octree"))
+                        opts.NoOctree = true;
+                    if (!WasSpecified("--lod-texture-scale"))
+                        opts.LodTextureScale = 1.0;
                     break;
 
                 case Preset.Standard:
-                    if (!WasSpecified("-z", "--zsplit")) opts.ZSplit = true;
-                    if (!WasSpecified("--octree")) opts.Octree = true;
-                    if (!WasSpecified("--local")) opts.LocalMode = true;
-                    if (!WasSpecified("--lod-texture-scale")) opts.LodTextureScale = 0.5;
-                    if (!WasSpecified("-m", "--decimation-mode")) opts.DecimationMode = DecimationMode.Quality;
+                    if (!WasSpecified("-z", "--zsplit"))
+                        opts.ZSplit = true;
+                    if (!WasSpecified("--octree"))
+                        opts.Octree = true;
+                    if (!WasSpecified("--local"))
+                        opts.LocalMode = true;
+                    if (!WasSpecified("--lod-texture-scale"))
+                        opts.LodTextureScale = 0.5;
+                    if (!WasSpecified("-m", "--decimation-mode"))
+                        opts.DecimationMode = DecimationMode.Quality;
+                    if (!WasSpecified("--glb"))
+                        opts.UseGlb = true;
                     break;
             }
         }
@@ -135,7 +149,7 @@ namespace Obj2Tiles
                     Console.WriteLine(" !> Warning: --local overrides --lat/--lon. ECEF transform will not be applied.");
 
                 StagesFacade.Tile(destFolderSplit, opts.Output, opts.LODs, opts.BaseError, boundsMapper, gpsCoords, opts.LocalMode, opts.EffectiveOctree,
-                    opts.ErrorEstimationMode, opts.ErrorFactor);
+                    opts.ErrorEstimationMode, opts.ErrorFactor, opts.EffectiveUseGlb);
 
                 Console.WriteLine(" ?> Tiling stage done in {0}", sw.Elapsed);
             }

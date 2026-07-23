@@ -15,7 +15,7 @@ public sealed class Options
     [Option('s', "stage", Required = false, HelpText = "Stage to stop at (Decimation, Splitting, Tiling)", Default = Stage.Tiling)]
     public Stage StopAt { get; set; }
 
-    [Option('p', "preset", Required = false, HelpText = "Applies a bundle of option defaults. 'legacy' sets --no-zsplit --no-octree --lod-texture-scale 1.0. 'standard' sets --octree --local --zsplit --lod-texture-scale 0.5 --decimation-mode Quality. Any of these options given explicitly on the command line take precedence over the preset.", Default = Preset.None)]
+    [Option('p', "preset", Required = false, HelpText = "Applies a bundle of option defaults. 'legacy' sets --no-zsplit --no-octree --lod-texture-scale 1.0. 'standard' sets --octree --local --zsplit --lod-texture-scale 0.5 --decimation-mode Quality --glb. Any of these options given explicitly on the command line take precedence over the preset.", Default = Preset.None)]
     public Preset Preset { get; set; }
 
     [Option('d', "divisions", Required = false, HelpText = "How many tiles divisions", Default = 2)]
@@ -81,11 +81,20 @@ public sealed class Options
     [Option("lod-texture-scale", Required = false, HelpText = "Per-LOD texture downscale factor. LOD-0 always keeps full resolution; each subsequent LOD multiplies the previous resolution by this factor. E.g. 0.5 gives LOD-1 at 1/2 resolution, LOD-2 at 1/4, etc. Default 0.5.", Default = 0.5)]
     public double LodTextureScale { get; set; }
 
+    [Option("glb", Required = false, HelpText = "Uses plain glTF/GLB tile content instead of wrapping it in b3dm (3D Tiles 1.1 style).", Default = false)]
+    public bool UseGlb { get; set; }
+
+    [Option("b3dm", Required = false, HelpText = "Forces legacy b3dm tile content, overriding --glb.", Default = false)]
+    public bool ForceB3dm { get; set; }
+
     [JsonIgnore]
     public bool EffectiveZSplit => ZSplit && !NoZSplit;
 
     [JsonIgnore]
     public bool EffectiveOctree => Octree && !NoOctree;
+
+    [JsonIgnore]
+    public bool EffectiveUseGlb => UseGlb && !ForceB3dm;
 }
 
 public enum Stage

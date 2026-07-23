@@ -283,6 +283,21 @@ public static class Utils
 
     public static void ConvertB3dm(string objPath, string destPath)
     {
+        var glbBytes = ConvertToGlbBytes(objPath);
+        var b3dm = new B3dm(glbBytes);
+
+        File.WriteAllBytes(destPath, b3dm.ToBytes());
+    }
+
+    public static void ConvertGlb(string objPath, string destPath)
+    {
+        var glbBytes = ConvertToGlbBytes(objPath);
+
+        File.WriteAllBytes(destPath, glbBytes);
+    }
+
+    private static byte[] ConvertToGlbBytes(string objPath)
+    {
         var dir = Path.GetDirectoryName(objPath);
         var name = Path.GetFileNameWithoutExtension(objPath);
 
@@ -296,8 +311,6 @@ public static class Utils
 
         var glbFile = Path.ChangeExtension(outputFile, ".glb");
 
-        var b3dm = new B3dm(File.ReadAllBytes(glbFile));
-
-        File.WriteAllBytes(destPath, b3dm.ToBytes());
+        return File.ReadAllBytes(glbFile);
     }
 }
