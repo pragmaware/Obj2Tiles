@@ -16,7 +16,9 @@ namespace MeshDecimatorCore
             PreserveUVFoldoverEdges = false,
             PreserveSurfaceCurvature = false,
             EnableSmartLink = true,
-            VertexLinkDistance = double.Epsilon,
+            // double.Epsilon is the smallest representable positive double (~4.9e-324), not a usable
+            // welding tolerance - this is the double-precision machine epsilon (C/C++ DBL_EPSILON).
+            VertexLinkDistance = 2.2204460492503131E-16,
             MaxIterationCount = 100,
             Aggressiveness = 7.0
         };
@@ -66,7 +68,7 @@ namespace MeshDecimatorCore
         /// <summary>
         /// The maximum distance between two vertices to be linked together
         /// when smart linking is enabled.
-        /// Default value: double.Epsilon
+        /// Default value: double-precision machine epsilon (2.2204460492503131E-16)
         /// </summary>
         public double VertexLinkDistance;
 

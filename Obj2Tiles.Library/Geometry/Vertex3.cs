@@ -1,5 +1,6 @@
 ﻿using System.Globalization;
 using System.Text.Json.Serialization;
+using Obj2Tiles.Library;
 
 namespace Obj2Tiles.Library.Geometry;
 
@@ -23,7 +24,7 @@ public class Vertex3
 
     protected bool Equals(Vertex3 other)
     {
-        return X.Equals(other.X) && Y.Equals(other.Y) && Y.Equals(other.Z);
+        return X.Equals(other.X) && Y.Equals(other.Y) && Z.Equals(other.Z);
     }
 
     public override bool Equals(object? obj)
@@ -39,14 +40,14 @@ public class Vertex3
 
     public static bool operator ==(Vertex3 a, Vertex3 b)
     {
-        return Math.Abs(a.X - b.X) < double.Epsilon && Math.Abs(a.Y - b.Y) < double.Epsilon &&
-               Math.Abs(a.Z - b.Z) < double.Epsilon;
+        return Math.Abs(a.X - b.X) < Common.Epsilon && Math.Abs(a.Y - b.Y) < Common.Epsilon &&
+               Math.Abs(a.Z - b.Z) < Common.Epsilon;
     }
 
     public static bool operator !=(Vertex3 a, Vertex3 b)
     {
-        return Math.Abs(a.X - b.X) > double.Epsilon ||
-               Math.Abs(a.Y - b.Y) > double.Epsilon && Math.Abs(a.Z - b.Z) > double.Epsilon;
+        return Math.Abs(a.X - b.X) > Common.Epsilon ||
+               Math.Abs(a.Y - b.Y) > Common.Epsilon && Math.Abs(a.Z - b.Z) > Common.Epsilon;
     }
 
     public double Distance(Vertex3 other)

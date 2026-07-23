@@ -7,7 +7,10 @@ namespace Obj2Tiles.Library;
 
 public static class Common
 {
-    public static readonly double Epsilon = double.Epsilon * 10;
+    // C#'s double.Epsilon is the smallest representable positive double (~4.9e-324), not a usable
+    // comparison tolerance. This is the double-precision machine epsilon (C/C++ DBL_EPSILON,
+    // std::numeric_limits<double>::epsilon(), 2^-52) that "epsilon" comparisons actually need.
+    public static readonly double Epsilon = 2.2204460492503131E-16;
     
     public static void CopyImage(Image<Rgba32> sourceImage, Image<Rgba32> dest, int sourceX, int sourceY, int sourceWidth, int sourceHeight, int destX, int destY)
     {

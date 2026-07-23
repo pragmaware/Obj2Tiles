@@ -145,7 +145,10 @@ public static partial class StagesFacade
                 PreserveSurfaceCurvature = true,
                 Aggressiveness = aggressiveness,
                 MaxIterationCount = maxIterations,
-                VertexLinkDistance = double.Epsilon
+                // double.Epsilon is the smallest representable positive double (~4.9e-324), not a
+                // usable welding tolerance - this is the double-precision machine epsilon (C/C++
+                // DBL_EPSILON), matching SimplificationOptions.Default.
+                VertexLinkDistance = 2.2204460492503131E-16
             }
         };
 
