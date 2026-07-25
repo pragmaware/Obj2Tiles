@@ -87,6 +87,9 @@ public sealed class Options
     [Option("b3dm", Required = false, HelpText = "Forces legacy b3dm tile content, overriding --glb.", Default = false)]
     public bool ForceB3dm { get; set; }
 
+    [Option("overlap", Required = false, HelpText = "Overlap distance between adjacent split tiles, in mesh units. Default 0.0 disables overlap entirely (tiles share an exact boundary). When > 0, each tile is extended past the split plane by this amount, so adjacent tiles carry a redundant band of duplicated surface at the seam - this hides sub-pixel precision gaps at the cost of extra geometry. Each overlapping tile is also nudged by a small random per-axis offset (up to 20% of the overlap, capped at 0.0001) to avoid z-fighting between the coincident duplicated surfaces.", Default = 0.0)]
+    public double Overlap { get; set; }
+
     [JsonIgnore]
     public bool EffectiveZSplit => ZSplit && !NoZSplit;
 

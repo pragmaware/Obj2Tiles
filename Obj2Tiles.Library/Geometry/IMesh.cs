@@ -15,6 +15,7 @@ public interface IMesh
     Vertex3 GetVertexBaricenter();
     Vertex3 GetVertexMedian();
     void WriteObj(string path, bool removeUnused = true);
+    void Translate(Vertex3 offset);
 
     int FacesCount { get; }
     int VertexCount { get; }

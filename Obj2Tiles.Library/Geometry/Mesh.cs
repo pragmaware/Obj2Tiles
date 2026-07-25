@@ -16,6 +16,12 @@ public class Mesh : IMesh
     public IReadOnlyList<Face> Faces => _faces;
     public IReadOnlyList<RGB>? VertexColors => _vertexColors;
 
+    public void Translate(Vertex3 offset)
+    {
+        for (var i = 0; i < _vertices.Count; i++)
+            _vertices[i] = _vertices[i] + offset;
+    }
+
     public const string DefaultName = "Mesh";
 
     public string Name { get; set; } = DefaultName;

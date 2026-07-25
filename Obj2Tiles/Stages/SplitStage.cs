@@ -9,7 +9,7 @@ public static partial class StagesFacade
 {
     public static async Task<Dictionary<string, TileBounds>[]> Split(string[] sourceFiles, string destFolder, int divisions,
         bool zsplit, bool keepOriginalTextures = false, SplitPointStrategy splitPointStrategy = SplitPointStrategy.VertexBaricenter,
-        bool isOctree = false, float lodTextureScale = 1.0f)
+        bool isOctree = false, float lodTextureScale = 1.0f, double overlap = 0.0)
     {
         var results = new Dictionary<string, TileBounds>[sourceFiles.Length];
 
@@ -80,7 +80,7 @@ public static partial class StagesFacade
             // close to source quality; coarser LODs can afford more compression.
             int jpegQuality = index == 0 ? 90 : 80;
 
-            tasks.Add(Split(file, dest, lodDivisions, zsplit, textureStrategy, splitPointStrategy, replaySplitPoint, textureDownscale, jpegQuality));
+            tasks.Add(Split(file, dest, lodDivisions, zsplit, textureStrategy, splitPointStrategy, replaySplitPoint, textureDownscale, jpegQuality, overlap));
         }
 
         await Task.WhenAll(tasks);
@@ -114,7 +114,8 @@ public static partial class StagesFacade
         SplitPointStrategy splitPointStrategy,
         Func<IMesh, Vertex3> getSplitPoint,
         float textureDownscale = 1.0f,
-        int jpegQuality = 75)
+        int jpegQuality = 75,
+        double overlap = 0.0)
     {
         var sw = new Stopwatch();
         var tilesBounds = new Dictionary<string, TileBounds>();
@@ -160,14 +161,14 @@ public static partial class StagesFacade
         if (splitPointStrategy == SplitPointStrategy.VertexMedian)
         {
             count = zSplit
-                ? await MeshUtils.RecurseSplitXYZBalanced(mesh, divisions, getSplitPoint, meshes)
-                : await MeshUtils.RecurseSplitXYBalanced(mesh, divisions, getSplitPoint, meshes);
+                ? await MeshUtils.RecurseSplitXYZBalanced(mesh, divisions, getSplitPoint, meshes, overlap)
+                : await MeshUtils.RecurseSplitXYBalanced(mesh, divisions, getSplitPoint, meshes, overlap);
         }
         else
         {
             count = zSplit
-                ? await MeshUtils.RecurseSplitXYZ(mesh, divisions, getSplitPoint, meshes)
-                : await MeshUtils.RecurseSplitXY(mesh, divisions, getSplitPoint, meshes);
+                ? await MeshUtils.RecurseSplitXYZ(mesh, divisions, getSplitPoint, meshes, overlap)
+                : await MeshUtils.RecurseSplitXY(mesh, divisions, getSplitPoint, meshes, overlap);
         }
 
         sw.Stop();
@@ -177,7 +178,7 @@ public static partial class StagesFacade
 
         Console.WriteLine(" -> Writing tiles");
         Console.WriteLine($" ?> Destination: {destPath}");
-        Console.WriteLine($" ?> Texture strategy: {textureStrategy}, Texture downscale: {textureDownscale:F3}, JPEG quality: {jpegQuality}");
+        Console.WriteLine($" ?> Texture strategy: {textureStrategy}, Texture downscale: {textureDownscale:F3}, JPEG quality: {jpegQuality}, Overlap: {overlap}");
 
         sw.Restart();
 
