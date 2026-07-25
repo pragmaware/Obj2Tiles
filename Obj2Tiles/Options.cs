@@ -57,7 +57,7 @@ public sealed class Options
     [Option("error-estimation-mode", Required = false, HelpText = "How to estimate geometric error: BoundingBoxDiagonal/AverageEdgeLength/MaximumEdgeLength derive each tile's error from that tile's own geometry (bounding-box diagonal, or average/maximum triangle edge length, times --error-factor). The Toplevel* variants instead derive a single value at the root from the coarsest LOD using the same metric, then halve it once per LOD subdivision.", Default = ErrorEstimationMode.AverageEdgeLength)]
     public ErrorEstimationMode ErrorEstimationMode { get; set; } = ErrorEstimationMode.AverageEdgeLength;
 
-    [Option("error-factor", Required = false, HelpText = "Multiplier applied to the metric selected by --error-estimation-mode. If omitted, defaults to 0.1 for *BoundingBoxDiagonal modes, 0.5 for *AverageEdgeLength/*MaximumEdgeLength modes.", Default = null)]
+    [Option("error-factor", Required = false, HelpText = "Multiplier applied to the metric selected by --error-estimation-mode. If omitted, defaults to 0.1 for *BoundingBoxDiagonal modes, 1.0 for *AverageEdgeLength/*MaximumEdgeLength modes.", Default = null)]
     public double? ErrorFactor { get; set; }
 
     [Option("use-system-temp", Required = false, HelpText = "Uses the system temp folder", Default = false)]

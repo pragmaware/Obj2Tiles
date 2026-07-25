@@ -15,7 +15,7 @@ public static partial class StagesFacade
     public static void Tile(string sourcePath, string destPath, int lods, double? baseError, Dictionary<string, TileBounds>[] boundsMapper,
         GpsCoords? coords = null, bool localMode = false, bool isOctree = false,
         ErrorEstimationMode errorEstimationMode = ErrorEstimationMode.AverageEdgeLength, double? errorFactor = null,
-        bool useGlb = false)
+        bool useGlb = false, double lodTextureScale = 1.0)
     {
 
         Console.WriteLine(" ?> Working on objs conversion");
@@ -55,10 +55,11 @@ public static partial class StagesFacade
         // If no --error was passed, derive the root's geometric error from the coarsest LOD using the
         // chosen mode's metric (bounding-box diagonal, or average/maximum triangle edge length), so it
         // scales with the actual mesh size and detail instead of relying on a fixed default like 100.
-        var rootGeometricError = baseError ?? EstimateRootMetric(boundsMapper, errorEstimationMode) * errorFactorValue;
+        var rootGeometricError = baseError ?? EstimateRootMetric(boundsMapper, errorEstimationMode) * errorFactorValue
+            * LodTextureQualityMultiplier(lods - 1, lodTextureScale);
 
         if (baseError == null)
-            Console.WriteLine($" ?> No --error provided, auto-computed root geometric error: {rootGeometricError:0.00} ({errorEstimationMode}, factor {errorFactorValue})");
+            Console.WriteLine($" ?> No --error provided, auto-computed root geometric error: {rootGeometricError:0.00} ({errorEstimationMode}, factor {errorFactorValue}, texture-quality multiplier {LodTextureQualityMultiplier(lods - 1, lodTextureScale):0.00})");
 
         // Generate tileset.json
         var tileset = new Tileset
@@ -119,9 +120,10 @@ public static partial class StagesFacade
                     var tile = new TileElement
                     {
                         // Leaves (lod == 0) are the finest representation, so they carry no further error.
-                        GeometricError = lod == 0 ? 0 : isToplevel
+                        GeometricError = lod == 0 ? 0 : (isToplevel
                             ? rootGeometricError / Math.Pow(2, lods - lod)
-                            : EstimateGeometricError(tileBounds, errorEstimationMode, errorFactorValue),
+                            : EstimateGeometricError(tileBounds, errorEstimationMode, errorFactorValue))
+                            * LodTextureQualityMultiplier(lod, lodTextureScale),
                         Refine = "REPLACE",
                         Content = new Content
                         {
@@ -171,9 +173,10 @@ public static partial class StagesFacade
 
                     var tile = new TileElement
                     {
-                        GeometricError = lod == 0 ? 0 : isToplevel
+                        GeometricError = lod == 0 ? 0 : (isToplevel
                             ? rootGeometricError / Math.Pow(2, lods - lod)
-                            : EstimateGeometricError(tileBounds, errorEstimationMode, errorFactorValue),
+                            : EstimateGeometricError(tileBounds, errorEstimationMode, errorFactorValue))
+                            * LodTextureQualityMultiplier(lod, lodTextureScale),
                         Refine = "REPLACE",
                         Content = new Content
                         {
@@ -225,6 +228,14 @@ public static partial class StagesFacade
         ErrorEstimationMode.ToplevelAverageEdgeLength or
         ErrorEstimationMode.ToplevelMaximumEdgeLength;
 
+    // Coarser LODs don't just have simpler geometry - their textures are also downscaled (see
+    // --lod-texture-scale in SplitStage), so they look progressively blurrier even where the
+    // surface itself barely changes between LODs. Mirrors SplitStage's textureDownscale formula
+    // (lodTextureScale^lod for lod > 0, full resolution at lod 0) and inverts it, so geometric
+    // error grows to reflect texture quality loss too, not just geometric simplification.
+    private static double LodTextureQualityMultiplier(int lod, double lodTextureScale) =>
+        lod == 0 ? 1.0 : 1.0 / Math.Pow(Math.Clamp(lodTextureScale, 1e-6, 1.0), lod);
+
     private static double ResolveErrorFactor(ErrorEstimationMode mode, double? errorFactor)
     {
         if (errorFactor.HasValue) return errorFactor.Value;
@@ -232,8 +243,12 @@ public static partial class StagesFacade
         return mode switch
         {
             ErrorEstimationMode.BoundingBoxDiagonal or ErrorEstimationMode.ToplevelBoundingBoxDiagonal => 0.1,
-            ErrorEstimationMode.AverageEdgeLength or ErrorEstimationMode.ToplevelAverageEdgeLength => 0.5,
-            ErrorEstimationMode.MaximumEdgeLength or ErrorEstimationMode.ToplevelMaximumEdgeLength => 0.5,
+            // Higher than the metric's "1x edge length" naive baseline: viewers pick finer LODs
+            // once a tile's projected screen-space error crosses their threshold, so a factor
+            // tuned too low (previously 0.5) makes coarse tiles look "good enough" for too long,
+            // delaying refinement to finer LODs well past where it visually should kick in.
+            ErrorEstimationMode.AverageEdgeLength or ErrorEstimationMode.ToplevelAverageEdgeLength => 1.0,
+            ErrorEstimationMode.MaximumEdgeLength or ErrorEstimationMode.ToplevelMaximumEdgeLength => 1.0,
             _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, null)
         };
     }

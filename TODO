@@ -1,0 +1,3 @@
+Texture compression, also at LOD-0
+Add draco compression support?
+Optional tile overlap (1mm?) + random direction nudge (10% of 1mm?) to avoid z-fighting

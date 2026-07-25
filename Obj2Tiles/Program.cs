@@ -149,7 +149,7 @@ namespace Obj2Tiles
                     Console.WriteLine(" !> Warning: --local overrides --lat/--lon. ECEF transform will not be applied.");
 
                 StagesFacade.Tile(destFolderSplit, opts.Output, opts.LODs, opts.BaseError, boundsMapper, gpsCoords, opts.LocalMode, opts.EffectiveOctree,
-                    opts.ErrorEstimationMode, opts.ErrorFactor, opts.EffectiveUseGlb);
+                    opts.ErrorEstimationMode, opts.ErrorFactor, opts.EffectiveUseGlb, opts.LodTextureScale);
 
                 Console.WriteLine(" ?> Tiling stage done in {0}", sw.Elapsed);
             }
