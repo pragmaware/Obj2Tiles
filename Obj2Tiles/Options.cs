@@ -36,6 +36,9 @@ public sealed class Options
     [Option('k', "keeptextures", Required = false, HelpText = "Keeps original textures", Default = false)]
     public bool KeepOriginalTextures { get; set; }
 
+    [Option("ignore-normal-maps", Required = false, HelpText = "Excludes normal maps entirely: not copied as a dependency and not referenced in the output materials/textures.", Default = false)]
+    public bool IgnoreNormalMaps { get; set; }
+
     [Option('g', "split-strategy", Required = false, HelpText = "Split strategy: AbsoluteCenter, VertexBaricenter, or VertexMedian (balanced tiles)", Default = SplitPointStrategy.VertexBaricenter)]
     public SplitPointStrategy SplitPointStrategy { get; set; } = SplitPointStrategy.VertexBaricenter;
 
@@ -86,6 +89,9 @@ public sealed class Options
 
     [Option("b3dm", Required = false, HelpText = "Forces legacy b3dm tile content, overriding --glb.", Default = false)]
     public bool ForceB3dm { get; set; }
+
+    [Option("unlit", Required = false, HelpText = "Marks every output material with the KHR_materials_unlit glTF extension, so viewers render the base color texture as-is without applying PBR lighting. Useful for photogrammetry content where lighting is already baked into the textures.", Default = false)]
+    public bool Unlit { get; set; }
 
     [Option("overlap", Required = false, HelpText = "Overlap distance between adjacent split tiles, in mesh units. Default 0.0 disables overlap entirely (tiles share an exact boundary). When > 0, each tile is extended past the split plane by this amount, so adjacent tiles carry a redundant band of duplicated surface at the seam - this hides sub-pixel precision gaps at the cost of extra geometry. Each overlapping tile is also nudged by a small random per-axis offset (up to 20% of the overlap, capped at 0.0001) to avoid z-fighting between the coincident duplicated surfaces.", Default = 0.0)]
     public double Overlap { get; set; }

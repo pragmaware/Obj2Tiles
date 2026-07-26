@@ -19,5 +19,12 @@ namespace SilentWave.Obj2Gltf
         /// Default is false
         /// </summary>
         public bool DeleteOriginals { get; set; } = false;
+
+        /// <summary>
+        /// Marks every output material with the KHR_materials_unlit extension, so viewers render
+        /// the base color texture as-is without applying PBR lighting. Useful for photogrammetry
+        /// content where lighting is already baked into the textures. Default is false.
+        /// </summary>
+        public bool UnlitMaterials { get; set; } = false;
     }
 }

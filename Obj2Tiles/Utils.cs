@@ -15,6 +15,11 @@ public static class Utils
         "norm", "bump", "disp", "decal"
     };
 
+    // Subset of MtlMapKeywords that Material.ReadMtl treats as the normal/bump map, kept in sync
+    // with the "norm"/"bump"/"map_Bump" cases there. Matching is OrdinalIgnoreCase (see
+    // GetMtlTextureDependencies), so this also covers "map_bump".
+    private static readonly string[] NormalMapKeywords = { "map_Bump", "norm", "bump" };
+
     private static readonly Dictionary<string, int> MtlOptionValueCounts =
         new(StringComparer.OrdinalIgnoreCase)
         {
@@ -140,7 +145,7 @@ public static class Utils
     // Returns (normalizedRelPath, resolvedAbsPath) pairs for every texture
     // referenced by an MTL file. Uses the full resolution algorithm.
     private static IEnumerable<(string relPath, string resolvedPath)> GetMtlTextureDependencies(
-        string mtlPath, string objFolder)
+        string mtlPath, string objFolder, bool ignoreNormalMaps = false)
     {
         if (!File.Exists(mtlPath)) yield break;
 
@@ -153,6 +158,7 @@ public static class Utils
 
             foreach (var keyword in MtlMapKeywords)
             {
+                if (ignoreNormalMaps && NormalMapKeywords.Contains(keyword, StringComparer.OrdinalIgnoreCase)) continue;
                 if (!trimmedLine.StartsWith(keyword, StringComparison.OrdinalIgnoreCase)) continue;
                 // Reject prefix matches like "map_Kd2" for "map_Kd"
                 if (trimmedLine.Length > keyword.Length &&
@@ -223,7 +229,7 @@ public static class Utils
         };
     }
     
-    public static void CopyObjDependencies(string input, string output)
+    public static void CopyObjDependencies(string input, string output, bool ignoreNormalMaps = false)
     {
         var objFolder = Path.GetDirectoryName(Path.GetFullPath(input)) ?? string.Empty;
         var outputFull = Path.GetFullPath(output).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
@@ -254,7 +260,7 @@ public static class Utils
                 Console.WriteLine($" -> Copied {mtlRelPath}");
             }
 
-            foreach (var (relPath, absPath) in GetMtlTextureDependencies(mtlSrcPath, objFolder))
+            foreach (var (relPath, absPath) in GetMtlTextureDependencies(mtlSrcPath, objFolder, ignoreNormalMaps))
             {
                 var texDestPath = Path.Combine(output, relPath);
                 if (!IsWithinOutput(outputFull, texDestPath))
@@ -281,22 +287,22 @@ public static class Utils
                full.StartsWith(outputFull + Path.DirectorySeparatorChar, StringComparison.Ordinal);
     }
 
-    public static void ConvertB3dm(string objPath, string destPath)
+    public static void ConvertB3dm(string objPath, string destPath, bool unlit = false)
     {
-        var glbBytes = ConvertToGlbBytes(objPath);
+        var glbBytes = ConvertToGlbBytes(objPath, unlit);
         var b3dm = new B3dm(glbBytes);
 
         File.WriteAllBytes(destPath, b3dm.ToBytes());
     }
 
-    public static void ConvertGlb(string objPath, string destPath)
+    public static void ConvertGlb(string objPath, string destPath, bool unlit = false)
     {
-        var glbBytes = ConvertToGlbBytes(objPath);
+        var glbBytes = ConvertToGlbBytes(objPath, unlit);
 
         File.WriteAllBytes(destPath, glbBytes);
     }
 
-    private static byte[] ConvertToGlbBytes(string objPath)
+    private static byte[] ConvertToGlbBytes(string objPath, bool unlit = false)
     {
         var dir = Path.GetDirectoryName(objPath);
         var name = Path.GetFileNameWithoutExtension(objPath);
@@ -304,7 +310,7 @@ public static class Utils
         var converter = Converter.MakeDefault();
         var outputFile = dir != null ? Path.Combine(dir, $"{name}.gltf") : $"{name}.gltf";
 
-        converter.Convert(objPath, outputFile);
+        converter.Convert(objPath, outputFile, new GltfConverterOptions { UnlitMaterials = unlit });
 
         var glbConv = new Gltf2GlbConverter();
         glbConv.Convert(new Gltf2GlbOptions(outputFile));

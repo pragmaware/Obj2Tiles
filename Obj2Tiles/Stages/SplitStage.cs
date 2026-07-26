@@ -9,7 +9,7 @@ public static partial class StagesFacade
 {
     public static async Task<Dictionary<string, TileBounds>[]> Split(string[] sourceFiles, string destFolder, int divisions,
         bool zsplit, bool keepOriginalTextures = false, SplitPointStrategy splitPointStrategy = SplitPointStrategy.VertexBaricenter,
-        bool isOctree = false, float lodTextureScale = 1.0f, double overlap = 0.0)
+        bool isOctree = false, float lodTextureScale = 1.0f, double overlap = 0.0, bool ignoreNormalMaps = false)
     {
         var results = new Dictionary<string, TileBounds>[sourceFiles.Length];
 
@@ -20,7 +20,7 @@ public static partial class StagesFacade
         Console.WriteLine(" -> Pre-computing split plan from LOD-0 vertices");
         var sw = Stopwatch.StartNew();
 
-        var mesh0 = MeshUtils.LoadMesh(sourceFiles[0], out _);
+        var mesh0 = MeshUtils.LoadMesh(sourceFiles[0], out _, ignoreNormalMaps);
         var vertices0 = mesh0.Vertices.ToArray();
 
         Func<Vertex3[], Vertex3> computeCenter = splitPointStrategy switch
@@ -80,7 +80,7 @@ public static partial class StagesFacade
             // close to source quality; coarser LODs can afford more compression.
             int jpegQuality = index == 0 ? 90 : 80;
 
-            tasks.Add(Split(file, dest, lodDivisions, zsplit, textureStrategy, splitPointStrategy, replaySplitPoint, textureDownscale, jpegQuality, overlap));
+            tasks.Add(Split(file, dest, lodDivisions, zsplit, textureStrategy, splitPointStrategy, replaySplitPoint, textureDownscale, jpegQuality, overlap, ignoreNormalMaps));
         }
 
         await Task.WhenAll(tasks);
@@ -115,7 +115,8 @@ public static partial class StagesFacade
         Func<IMesh, Vertex3> getSplitPoint,
         float textureDownscale = 1.0f,
         int jpegQuality = 75,
-        double overlap = 0.0)
+        double overlap = 0.0,
+        bool ignoreNormalMaps = false)
     {
         var sw = new Stopwatch();
         var tilesBounds = new Dictionary<string, TileBounds>();
@@ -125,7 +126,7 @@ public static partial class StagesFacade
         Console.WriteLine($" -> Loading OBJ file \"{sourcePath}\"");
 
         sw.Start();
-        var mesh = MeshUtils.LoadMesh(sourcePath, out var deps);
+        var mesh = MeshUtils.LoadMesh(sourcePath, out var deps, ignoreNormalMaps);
 
         Console.WriteLine(
             $" ?> Loaded {mesh.VertexCount} vertices, {mesh.FacesCount} faces in {sw.ElapsedMilliseconds}ms");

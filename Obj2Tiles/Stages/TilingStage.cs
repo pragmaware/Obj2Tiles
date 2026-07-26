@@ -15,14 +15,14 @@ public static partial class StagesFacade
     public static void Tile(string sourcePath, string destPath, int lods, double? baseError, Dictionary<string, TileBounds>[] boundsMapper,
         GpsCoords? coords = null, bool localMode = false, bool isOctree = false,
         ErrorEstimationMode errorEstimationMode = ErrorEstimationMode.AverageEdgeLength, double? errorFactor = null,
-        bool useGlb = false, double lodTextureScale = 1.0)
+        bool useGlb = false, double lodTextureScale = 1.0, bool unlit = false)
     {
 
         Console.WriteLine(" ?> Working on objs conversion");
 
         var tileExtension = useGlb ? ".glb" : ".b3dm";
 
-        ConvertAllTiles(sourcePath, destPath, lods, useGlb);
+        ConvertAllTiles(sourcePath, destPath, lods, useGlb, unlit);
 
         Console.WriteLine(" -> Generating tileset.json");
 
@@ -313,7 +313,7 @@ public static partial class StagesFacade
         return totalFaces == 0 ? 0 : weightedSum / totalFaces;
     }
 
-    private static void ConvertAllTiles(string sourcePath, string destPath, int lods, bool useGlb)
+    private static void ConvertAllTiles(string sourcePath, string destPath, int lods, bool useGlb, bool unlit = false)
     {
         var tileExtension = useGlb ? ".glb" : ".b3dm";
         var filesToConvert = new List<Tuple<string, string>>();
@@ -337,9 +337,9 @@ public static partial class StagesFacade
             Console.WriteLine($" -> Converting to {tileExtension.TrimStart('.')} '{file.Item1}'");
 
             if (useGlb)
-                Utils.ConvertGlb(file.Item1, file.Item2);
+                Utils.ConvertGlb(file.Item1, file.Item2, unlit);
             else
-                Utils.ConvertB3dm(file.Item1, file.Item2);
+                Utils.ConvertB3dm(file.Item1, file.Item2, unlit);
         });
     }
 

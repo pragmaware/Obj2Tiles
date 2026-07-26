@@ -104,7 +104,8 @@ namespace Obj2Tiles
                 Console.WriteLine($" => Decimation stage with {opts.LODs} LODs");
                 sw.Start();
 
-                var decimateRes = await StagesFacade.Decimate(opts.Input, destFolderDecimation, opts.LODs, opts.DecimationMode);
+                var decimateRes = await StagesFacade.Decimate(opts.Input, destFolderDecimation, opts.LODs, opts.DecimationMode,
+                    opts.IgnoreNormalMaps);
 
                 Console.WriteLine(" ?> Decimation stage done in {0}", sw.Elapsed);
 
@@ -123,7 +124,7 @@ namespace Obj2Tiles
 
                 var boundsMapper = await StagesFacade.Split(decimateRes.DestFiles, destFolderSplit, opts.Divisions,
                     opts.EffectiveZSplit, opts.KeepOriginalTextures, opts.SplitPointStrategy, opts.EffectiveOctree, (float)opts.LodTextureScale,
-                    opts.Overlap);
+                    opts.Overlap, opts.IgnoreNormalMaps);
 
                 Console.WriteLine(" ?> Splitting stage done in {0}", sw.Elapsed);
 
@@ -150,7 +151,7 @@ namespace Obj2Tiles
                     Console.WriteLine(" !> Warning: --local overrides --lat/--lon. ECEF transform will not be applied.");
 
                 StagesFacade.Tile(destFolderSplit, opts.Output, opts.LODs, opts.BaseError, boundsMapper, gpsCoords, opts.LocalMode, opts.EffectiveOctree,
-                    opts.ErrorEstimationMode, opts.ErrorFactor, opts.EffectiveUseGlb, opts.LodTextureScale);
+                    opts.ErrorEstimationMode, opts.ErrorFactor, opts.EffectiveUseGlb, opts.LodTextureScale, opts.Unlit);
 
                 Console.WriteLine(" ?> Tiling stage done in {0}", sw.Elapsed);
             }

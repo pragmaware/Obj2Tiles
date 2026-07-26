@@ -10,7 +10,7 @@ namespace Obj2Tiles.Stages;
 public static partial class StagesFacade
 {
     public static async Task<DecimateResult> Decimate(string sourcePath, string destPath, int lods,
-        DecimationMode mode = DecimationMode.Standard)
+        DecimationMode mode = DecimationMode.Standard, bool ignoreNormalMaps = false)
     {
 
         var qualities = Enumerable.Range(0, lods - 1).Select(i => 1.0f - ((i + 1) / (float)lods)).ToArray();
@@ -46,7 +46,7 @@ public static partial class StagesFacade
         Console.WriteLine(" ?> Decimation done");
 
         Console.WriteLine(" -> Copying obj dependencies");
-        Utils.CopyObjDependencies(sourcePath, destPath);
+        Utils.CopyObjDependencies(sourcePath, destPath, ignoreNormalMaps);
         Console.WriteLine(" ?> Dependencies copied");
 
         return new DecimateResult { DestFiles = destFiles.ToArray(), Bounds = bounds };

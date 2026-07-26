@@ -174,7 +174,8 @@ public class Material : ICloneable
         IlluminationModel = illuminationModel;
     }
 
-    public static Material[] ReadMtl(string path, out string[] dependencies, string? objFilePath = null)
+    public static Material[] ReadMtl(string path, out string[] dependencies, string? objFilePath = null,
+        bool ignoreNormalMaps = false)
     {
         var lines = File.ReadAllLines(path);
         var materials = new List<Material>();
@@ -236,6 +237,8 @@ public class Material : ICloneable
                 case "map_Bump":
                 case "map_bump":
                 {
+                    if (ignoreNormalMaps) break;
+
                     var texPath = ExtractTexturePath(remainder);
                     if (!string.IsNullOrEmpty(texPath))
                     {

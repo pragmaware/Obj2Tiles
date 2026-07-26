@@ -12,7 +12,7 @@ public class MeshUtils
         return LoadMesh(fileName, out _);
     }
 
-    public static IMesh LoadMesh(string fileName, out string[] dependencies)
+    public static IMesh LoadMesh(string fileName, out string[] dependencies, bool ignoreNormalMaps = false)
     {
         using var reader = new StreamReader(fileName);
 
@@ -183,7 +183,7 @@ public class MeshUtils
                     var mtlFileName = string.Join(" ", segs, 1, segs.Length - 1);
                     var mtlFilePath = Path.Combine(Path.GetDirectoryName(fileName) ?? string.Empty, mtlFileName);
 
-                    var mats = Material.ReadMtl(mtlFilePath, out var mtlDeps, fileName);
+                    var mats = Material.ReadMtl(mtlFilePath, out var mtlDeps, fileName, ignoreNormalMaps);
 
                     deps.AddRange(mtlDeps);
                     deps.Add(mtlFilePath);

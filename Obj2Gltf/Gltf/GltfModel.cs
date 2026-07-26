@@ -14,6 +14,8 @@ namespace SilentWave.Obj2Gltf.Gltf
         public List<Accessor> Accessors { get; } = new List<Accessor>();
         [JsonProperty("asset")]
         public Asset Asset { get; set; } = new Asset { Generator = "SilentWave", Version = "2.0" };
+        [JsonProperty("extensionsUsed", NullValueHandling = NullValueHandling.Ignore)]
+        public List<string> ExtensionsUsed { get; set; }
         [JsonProperty("buffers")]
         public List<Buffer> Buffers { get; } = new List<Buffer>();
         [JsonProperty("bufferViews")]
