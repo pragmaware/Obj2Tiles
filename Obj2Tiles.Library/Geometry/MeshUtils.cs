@@ -59,9 +59,19 @@ public class MeshUtils
                         double.Parse(segs[1], CultureInfo.InvariantCulture),
                         double.Parse(segs[2], CultureInfo.InvariantCulture));
 
-                    // Wrap UV coordinates to [0, 1] range for mirroring/UDIM workflows (Issue #35)
-                    if (vtx.X < 0 || vtx.X > 1 || vtx.Y < 0 || vtx.Y > 1)
+                    // Wrap UV coordinates to [0, 1] range for mirroring/UDIM workflows (Issue #35).
+                    // Only wrap values that are meaningfully outside [0,1] - a genuine UDIM/mirror
+                    // offset. Exporters commonly emit tiny negative/>1 noise (e.g. -0.000001) right
+                    // at the UV boundary; wrapping THAT via Math.Floor sends it flying to the
+                    // opposite edge of the texture (-0.000001 -> 0.999999) instead of leaving it at
+                    // ~0 where it belongs, corrupting every downstream edge interpolation that
+                    // touches that vertex. Such noise gets clamped back to [0,1] instead.
+                    const double uvNoiseEpsilon = 1e-4;
+                    if (vtx.X < -uvNoiseEpsilon || vtx.X > 1 + uvNoiseEpsilon ||
+                        vtx.Y < -uvNoiseEpsilon || vtx.Y > 1 + uvNoiseEpsilon)
                         vtx = new Vertex2(vtx.X - Math.Floor(vtx.X), vtx.Y - Math.Floor(vtx.Y));
+                    else if (vtx.X < 0 || vtx.X > 1 || vtx.Y < 0 || vtx.Y > 1)
+                        vtx = new Vertex2(Math.Clamp(vtx.X, 0, 1), Math.Clamp(vtx.Y, 0, 1));
 
                     textureVertices.Add(vtx);
                     break;

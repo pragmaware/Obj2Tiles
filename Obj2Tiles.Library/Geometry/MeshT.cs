@@ -481,6 +481,26 @@ public class MeshT : IMesh
 
         var newTextureVertices = new Dictionary<Vertex2, int>(_textureVertices.Count);
 
+        // Exporters (Blender in particular) commonly emit a separate position vertex per
+        // unique (position, normal, uv) corner, so the SAME 3D point can appear under many
+        // different vertex indices. Canonicalizing by value once - now that Vertex3.Equals
+        // is correct - means the position-edge adjacency check in GetEdgesMapper recognizes
+        // two triangles as sharing an edge whenever they're at the same actual location,
+        // regardless of which duplicate index each one happens to reference. Without this,
+        // position-edge matching on raw indices sees almost no adjacency at all on meshes
+        // like this, shattering every UV island into near-single-triangle fragments.
+        var canonicalPosition = new Dictionary<Vertex3, int>(_vertices.Count);
+        var canonicalIndex = new int[_vertices.Count];
+        for (var i = 0; i < _vertices.Count; i++)
+        {
+            if (!canonicalPosition.TryGetValue(_vertices[i], out var canonical))
+            {
+                canonical = i;
+                canonicalPosition[_vertices[i]] = canonical;
+            }
+            canonicalIndex[i] = canonical;
+        }
+
         for (var m = 0; m < facesByMaterial.Count; m++)
         {
             var material = _materials[m];
@@ -489,7 +509,7 @@ public class MeshT : IMesh
             if (facesIndexes.Count == 0)
                 continue;
 
-            var edgesMapper = GetEdgesMapper(facesIndexes);
+            var edgesMapper = GetEdgesMapper(facesIndexes, canonicalIndex);
             var facesMapper = GetFacesMapper(edgesMapper);
             var clusters = GetFacesClusters(facesIndexes, facesMapper);
 
@@ -940,22 +960,31 @@ public class MeshT : IMesh
         return clusters;
     }
 
-    private static Dictionary<int, List<int>> GetFacesMapper(Dictionary<Edge, List<int>> edgesMapper)
+    // Two faces are only in the same UV island if they share a real 3D edge (position-index
+    // match - true mesh adjacency) AND the UV mapping is continuous across it (matching
+    // texture-index edge - no seam). Position edges are the map key; each occurrence also
+    // carries its paired texture edge so GetFacesMapper can check that second condition.
+    // Requiring only the texture edge (as this used to) lets two faces that merely reuse the
+    // same UV coordinates - e.g. two unrelated rooms whose floors intentionally share one
+    // tileable UV layout, deduplicated by the exporter into the same vt indices - be wrongly
+    // treated as one contiguous island, even though they don't share a single 3D vertex.
+    private static Dictionary<int, List<int>> GetFacesMapper(Dictionary<Edge, List<(int FaceIndex, Edge TextureEdge)>> edgesMapper)
     {
         var facesMapper = new Dictionary<int, List<int>>();
 
         foreach (var edge in edgesMapper)
         {
-            for (var i = 0; i < edge.Value.Count; i++)
+            var entries = edge.Value;
+            for (var i = 0; i < entries.Count; i++)
             {
-                var faceIndex = edge.Value[i];
+                var (faceIndex, textureEdge) = entries[i];
                 if (!facesMapper.ContainsKey(faceIndex))
                     facesMapper.Add(faceIndex, []);
 
-                for (var index = 0; index < edge.Value.Count; index++)
+                for (var index = 0; index < entries.Count; index++)
                 {
-                    var f = edge.Value[index];
-                    if (f != faceIndex)
+                    var (f, otherTextureEdge) = entries[index];
+                    if (f != faceIndex && textureEdge.Equals(otherTextureEdge))
                         facesMapper[faceIndex].Add(f);
                 }
             }
@@ -964,32 +993,33 @@ public class MeshT : IMesh
         return facesMapper;
     }
 
-    private Dictionary<Edge, List<int>> GetEdgesMapper(IReadOnlyList<int> facesIndexes)
+    private Dictionary<Edge, List<(int FaceIndex, Edge TextureEdge)>> GetEdgesMapper(IReadOnlyList<int> facesIndexes,
+        int[] canonicalIndex)
     {
-        var edgesMapper = new Dictionary<Edge, List<int>>();
+        var edgesMapper = new Dictionary<Edge, List<(int, Edge)>>();
         edgesMapper.EnsureCapacity(facesIndexes.Count * 3);
+
+        void AddEdge(int posA, int posB, int texA, int texB, int faceIndex)
+        {
+            var posEdge = new Edge(canonicalIndex[posA], canonicalIndex[posB]);
+
+            if (!edgesMapper.TryGetValue(posEdge, out var list))
+            {
+                list = [];
+                edgesMapper.Add(posEdge, list);
+            }
+
+            list.Add((faceIndex, new Edge(texA, texB)));
+        }
 
         for (var idx = 0; idx < facesIndexes.Count; idx++)
         {
             var faceIndex = facesIndexes[idx];
             var f = _faces[faceIndex];
 
-            var e1 = new Edge(f.TextureIndexA, f.TextureIndexB);
-            var e2 = new Edge(f.TextureIndexB, f.TextureIndexC);
-            var e3 = new Edge(f.TextureIndexA, f.TextureIndexC);
-
-            if (!edgesMapper.ContainsKey(e1))
-                edgesMapper.Add(e1, []);
-
-            if (!edgesMapper.ContainsKey(e2))
-                edgesMapper.Add(e2, []);
-
-            if (!edgesMapper.ContainsKey(e3))
-                edgesMapper.Add(e3, []);
-
-            edgesMapper[e1].Add(faceIndex);
-            edgesMapper[e2].Add(faceIndex);
-            edgesMapper[e3].Add(faceIndex);
+            AddEdge(f.IndexA, f.IndexB, f.TextureIndexA, f.TextureIndexB, faceIndex);
+            AddEdge(f.IndexB, f.IndexC, f.TextureIndexB, f.TextureIndexC, faceIndex);
+            AddEdge(f.IndexA, f.IndexC, f.TextureIndexA, f.TextureIndexC, faceIndex);
         }
 
         return edgesMapper;
