@@ -16,7 +16,7 @@ public sealed class Options
     [Option('s', "stage", Required = false, HelpText = "Stage to stop at (Decimation, Splitting, Tiling)", Default = Stage.Tiling)]
     public Stage StopAt { get; set; }
 
-    [Option('p', "preset", Required = false, HelpText = "Applies a bundle of option defaults. 'legacy' sets --no-zsplit --no-octree --lod-texture-scale 1.0. 'standard' sets --octree --local --zsplit --lod-texture-scale 0.5 --decimation-mode Quality --glb --texture-quality 80 --fine-texture-quality 90. Any of these options given explicitly on the command line take precedence over the preset.", Default = Preset.None)]
+    [Option('p', "preset", Required = false, HelpText = "Applies a bundle of option defaults. 'legacy' sets --no-zsplit --no-octree --lod-texture-scale 1.0. 'standard' sets --octree --local --zsplit --lod-texture-scale 0.5 --decimation-mode Quality --glb --texture-quality 80 --fine-texture-quality 90 --max-texture-size 8192. Any of these options given explicitly on the command line take precedence over the preset.", Default = Preset.None)]
     public Preset Preset { get; set; }
 
     [Option('d', "divisions", Required = false, HelpText = "How many tiles divisions", Default = 2)]
