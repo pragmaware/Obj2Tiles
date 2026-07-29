@@ -70,6 +70,12 @@ namespace Obj2Tiles
                         opts.DecimationMode = DecimationMode.Quality;
                     if (!WasSpecified("--glb"))
                         opts.UseGlb = true;
+                    if (!WasSpecified("--texture-quality"))
+                        opts.TextureQuality = 80;
+                    if (!WasSpecified("--fine-texture-quality"))
+                        opts.FineTextureQuality = 90;
+                    if (!WasSpecified("--max-texture-size"))
+                        opts.MaxTextureSize = 8192;
                     break;
             }
         }
