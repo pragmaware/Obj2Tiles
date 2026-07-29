@@ -10,7 +10,7 @@ public static partial class StagesFacade
     public static async Task<Dictionary<string, TileBounds>[]> Split(string[] sourceFiles, string destFolder, int divisions,
         bool zsplit, bool keepOriginalTextures = false, SplitPointStrategy splitPointStrategy = SplitPointStrategy.VertexBaricenter,
         bool isOctree = false, float lodTextureScale = 1.0f, double overlap = 0.0, bool ignoreNormalMaps = false,
-        int maxTextureSize = 0, int textureQuality = 75, TextureFormat textureFormat = TextureFormat.Jpeg)
+        int maxTextureSize = 0, int textureQuality = 75, TextureFormat textureFormat = TextureFormat.Jpeg, int fineTextureQuality = 0)
     {
         var results = new Dictionary<string, TileBounds>[sourceFiles.Length];
 
@@ -77,8 +77,12 @@ public static partial class StagesFacade
             int lodDivisions = isOctree ? divisions + sourceFiles.Length - index - 1 : divisions;
             float textureDownscale = index == 0 ? 1.0f : (float)Math.Pow(lodTextureScale, index);
 
+            // LOD-0 is the finest, most-visible representation, so it gets its own quality knob;
+            // 0 (the default) falls back to the general --texture-quality for every LOD.
+            int effectiveTextureQuality = index == 0 && fineTextureQuality > 0 ? fineTextureQuality : textureQuality;
+
             tasks.Add(Split(file, dest, lodDivisions, zsplit, textureStrategy, splitPointStrategy, replaySplitPoint, textureDownscale,
-                maxTextureSize, textureQuality, textureFormat, overlap, ignoreNormalMaps));
+                maxTextureSize, effectiveTextureQuality, textureFormat, overlap, ignoreNormalMaps));
         }
 
         await Task.WhenAll(tasks);

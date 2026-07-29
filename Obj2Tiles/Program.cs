@@ -163,7 +163,7 @@ namespace Obj2Tiles
 
                 var boundsMapper = await StagesFacade.Split(decimateRes.DestFiles, destFolderSplit, opts.Divisions,
                     opts.EffectiveZSplit, opts.KeepOriginalTextures, opts.SplitPointStrategy, opts.EffectiveOctree, (float)opts.LodTextureScale,
-                    opts.Overlap, opts.IgnoreNormalMaps, opts.MaxTextureSize, opts.TextureQuality, opts.TextureFormat);
+                    opts.Overlap, opts.IgnoreNormalMaps, opts.MaxTextureSize, opts.TextureQuality, opts.TextureFormat, opts.FineTextureQuality);
 
                 Console.WriteLine(" ?> Splitting stage done in {0}", sw.Elapsed);
 
@@ -361,6 +361,12 @@ namespace Obj2Tiles
             if (opts.TextureQuality is < 1 or > 100)
             {
                 Console.WriteLine(" !> --texture-quality must be between 1 and 100");
+                return false;
+            }
+
+            if (opts.FineTextureQuality is < 0 or > 100)
+            {
+                Console.WriteLine(" !> --fine-texture-quality must be between 0 and 100 (0 falls back to --texture-quality)");
                 return false;
             }
 

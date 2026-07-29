@@ -559,6 +559,8 @@ public class MeshT : IMesh
 
     private JpegEncoder CreateEncoder() => new JpegEncoder { Quality = Math.Clamp(TextureQuality, 1, 100) };
 
+    private static readonly string[] JpegExtensions = { ".jpg", ".jpeg" };
+
     /// <summary>
     /// Output file extension for a repacked atlas, honoring the selected texture format. Normal maps
     /// are always PNG regardless of format/strategy - see <see cref="SaveAtlas"/>.
@@ -570,11 +572,12 @@ public class MeshT : IMesh
 
     /// <summary>
     /// Saves a repacked atlas with the encoder matching the current strategy and format.
-    /// WebP is always encoded lossy at TextureQuality; for the classic formats Repack is lossless
-    /// (original format) and RepackCompressed is lossy JPEG. Normal maps are always saved losslessly
-    /// (PNG), ignoring TextureFormat/TexturesStrategy: JPEG/WebP lossy compression corrupts the
-    /// directional data encoded in the RGB channels, producing visible lighting artifacts even
-    /// though the diffuse texture tolerates it fine.
+    /// WebP is always encoded lossy at TextureQuality; for the classic formats RepackCompressed is
+    /// always lossy JPEG at TextureQuality, and Repack re-encodes at TextureQuality only when the
+    /// output stays JPEG (matching the source), otherwise it's a lossless save in the original
+    /// format. Normal maps are always saved losslessly (PNG), ignoring TextureFormat/TexturesStrategy:
+    /// JPEG/WebP lossy compression corrupts the directional data encoded in the RGB channels,
+    /// producing visible lighting artifacts even though the diffuse texture tolerates it fine.
     /// </summary>
     private void SaveAtlas(Image image, string path, bool isNormalMap)
     {
@@ -588,7 +591,15 @@ public class MeshT : IMesh
             image.SaveAsWebp(path, new WebpEncoder { FileFormat = WebpFileFormatType.Lossy, Quality = Math.Clamp(TextureQuality, 1, 100) });
         }
         else if (TexturesStrategy == TexturesStrategy.Repack)
-            image.Save(path);
+        {
+            // Repack keeps the source format (see AtlasExtension); when that format is JPEG, re-encode
+            // at TextureQuality (e.g. --fine-texture-quality for LOD-0) instead of ImageSharp's default
+            // quality so the setting actually controls Repack-strategy atlases, not just RepackCompressed.
+            if (JpegExtensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase))
+                image.SaveAsJpeg(path, CreateEncoder());
+            else
+                image.Save(path);
+        }
         else
             image.SaveAsJpeg(path, CreateEncoder());
     }

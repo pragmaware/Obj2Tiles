@@ -88,8 +88,11 @@ public sealed class Options
     [Option("max-texture-size", Required = false, HelpText = "Maximum texture resolution (per side, in pixels) used when repacking/compressing atlases. Larger source textures are downscaled to fit, which bounds the dominant LOD-0 texture cost. 0 disables the cap.", Default = 4096)]
     public int MaxTextureSize { get; set; }
 
-    [Option("texture-quality", Required = false, HelpText = "JPEG quality (1-100) for compressed textures (RepackCompressed and the tileset root). Higher is better quality but larger.", Default = 75)]
+    [Option("texture-quality", Required = false, HelpText = "JPEG quality (1-100) for compressed textures (RepackCompressed, the tileset root, and any Repack-strategy atlas that stays JPEG). Higher is better quality but larger. Also the fallback for --fine-texture-quality.", Default = 75)]
     public int TextureQuality { get; set; }
+
+    [Option("fine-texture-quality", Required = false, HelpText = "JPEG quality (1-100) for LOD-0 (the finest LOD) textures only. Default 0 falls back to --texture-quality for LOD-0 too.", Default = 0)]
+    public int FineTextureQuality { get; set; }
 
     [Option("texture-format", Required = false, HelpText = "Output image format for repacked/compressed textures: Jpeg (default), Webp or Ktx2. Webp emits the EXT_texture_webp glTF extension (25-35% smaller than JPEG). Ktx2 encodes GPU-compressed Basis Universal textures (KHR_texture_basisu), cutting GPU/VRAM usage ~4-8x, using the bundled libktx native library (no separate tool required); make sure your renderer supports the chosen format.", Default = TextureFormat.Jpeg)]
     public TextureFormat TextureFormat { get; set; }
