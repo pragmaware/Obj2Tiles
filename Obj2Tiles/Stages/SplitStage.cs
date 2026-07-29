@@ -9,7 +9,8 @@ public static partial class StagesFacade
 {
     public static async Task<Dictionary<string, TileBounds>[]> Split(string[] sourceFiles, string destFolder, int divisions,
         bool zsplit, bool keepOriginalTextures = false, SplitPointStrategy splitPointStrategy = SplitPointStrategy.VertexBaricenter,
-        bool isOctree = false, float lodTextureScale = 1.0f, double overlap = 0.0, bool ignoreNormalMaps = false)
+        bool isOctree = false, float lodTextureScale = 1.0f, double overlap = 0.0, bool ignoreNormalMaps = false,
+        int maxTextureSize = 0, int textureQuality = 75, TextureFormat textureFormat = TextureFormat.Jpeg)
     {
         var results = new Dictionary<string, TileBounds>[sourceFiles.Length];
 
@@ -76,11 +77,8 @@ public static partial class StagesFacade
             int lodDivisions = isOctree ? divisions + sourceFiles.Length - index - 1 : divisions;
             float textureDownscale = index == 0 ? 1.0f : (float)Math.Pow(lodTextureScale, index);
 
-            // LOD-0 is the finest, most-visible representation, so its JPEG re-encode should stay
-            // close to source quality; coarser LODs can afford more compression.
-            int jpegQuality = index == 0 ? 90 : 80;
-
-            tasks.Add(Split(file, dest, lodDivisions, zsplit, textureStrategy, splitPointStrategy, replaySplitPoint, textureDownscale, jpegQuality, overlap, ignoreNormalMaps));
+            tasks.Add(Split(file, dest, lodDivisions, zsplit, textureStrategy, splitPointStrategy, replaySplitPoint, textureDownscale,
+                maxTextureSize, textureQuality, textureFormat, overlap, ignoreNormalMaps));
         }
 
         await Task.WhenAll(tasks);
@@ -95,7 +93,9 @@ public static partial class StagesFacade
         bool zSplit = false,
         Box3? bounds = null,
         TexturesStrategy textureStrategy = TexturesStrategy.Repack,
-        SplitPointStrategy splitPointStrategy = SplitPointStrategy.VertexBaricenter)
+        SplitPointStrategy splitPointStrategy = SplitPointStrategy.VertexBaricenter,
+        float textureDownscale = 1.0f,
+        int maxTextureSize = 0, int textureQuality = 75, TextureFormat textureFormat = TextureFormat.Jpeg)
     {
         Func<IMesh, Vertex3> getSplitPoint = splitPointStrategy switch
         {
@@ -105,7 +105,7 @@ public static partial class StagesFacade
             _ => throw new ArgumentOutOfRangeException(nameof(splitPointStrategy))
         };
 
-        return await Split(sourcePath, destPath, divisions, zSplit, textureStrategy, splitPointStrategy, getSplitPoint);
+        return await Split(sourcePath, destPath, divisions, zSplit, textureStrategy, splitPointStrategy, getSplitPoint, textureDownscale, maxTextureSize, textureQuality, textureFormat);
     }
 
     private static async Task<Dictionary<string, TileBounds>> Split(string sourcePath, string destPath, int divisions,
@@ -114,7 +114,7 @@ public static partial class StagesFacade
         SplitPointStrategy splitPointStrategy,
         Func<IMesh, Vertex3> getSplitPoint,
         float textureDownscale = 1.0f,
-        int jpegQuality = 75,
+        int maxTextureSize = 0, int textureQuality = 75, TextureFormat textureFormat = TextureFormat.Jpeg,
         double overlap = 0.0,
         bool ignoreNormalMaps = false)
     {
@@ -138,7 +138,10 @@ public static partial class StagesFacade
             if (mesh is MeshT t)
             {
                 t.TexturesStrategy = TexturesStrategy.Compress;
-                t.JpegQuality = jpegQuality;
+                t.TextureDownscale = textureDownscale;
+                t.MaxTextureSize = maxTextureSize;
+                t.TextureQuality = textureQuality;
+                t.TextureFormat = textureFormat;
             }
 
             mesh.WriteObj(Path.Combine(destPath, $"{mesh.Name}.obj"));
@@ -179,7 +182,7 @@ public static partial class StagesFacade
 
         Console.WriteLine(" -> Writing tiles");
         Console.WriteLine($" ?> Destination: {destPath}");
-        Console.WriteLine($" ?> Texture strategy: {textureStrategy}, Texture downscale: {textureDownscale:F3}, JPEG quality: {jpegQuality}, Overlap: {overlap}");
+        Console.WriteLine($" ?> Texture strategy: {textureStrategy}, Texture downscale: {textureDownscale:F3}, Texture quality: {textureQuality}, Overlap: {overlap}");
 
         sw.Restart();
 
@@ -197,7 +200,9 @@ public static partial class StagesFacade
             {
                 t.TexturesStrategy = textureStrategy;
                 t.TextureDownscale = textureDownscale;
-                t.JpegQuality = jpegQuality;
+                t.MaxTextureSize = maxTextureSize;
+                t.TextureQuality = textureQuality;
+                t.TextureFormat = textureFormat;
             }
 
             var tilePath = Path.Combine(destPath, $"{m.Name}.obj");

@@ -5,6 +5,7 @@ using Obj2Tiles.Library.Algos;
 using Obj2Tiles.Library.Materials;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Jpeg;
+using SixLabors.ImageSharp.Formats.Webp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 using Path = System.IO.Path;
@@ -46,10 +47,21 @@ public class MeshT : IMesh
     public float TextureDownscale { get; set; } = 1.0f;
 
     /// <summary>
-    /// Quality used whenever a diffuse texture is (re-)encoded as JPEG, regardless of
-    /// TexturesStrategy. Callers set this per LOD (e.g. higher for LOD-0, lower for coarser LODs).
+    /// Maximum source texture resolution (per side, in pixels) used when repacking or compressing
+    /// atlases. Larger textures are downscaled to fit. 0 disables the cap.
     /// </summary>
-    public int JpegQuality { get; set; } = 75;
+    public int MaxTextureSize { get; set; } = 0;
+
+    /// <summary>
+    /// JPEG quality (1-100) used when saving compressed textures (RepackCompressed and Compress).
+    /// </summary>
+    public int TextureQuality { get; set; } = 75;
+
+    /// <summary>
+    /// Output image format for repacked/compressed textures. Webp emits the EXT_texture_webp glTF
+    /// extension and is typically 25-35% smaller than JPEG at comparable quality.
+    /// </summary>
+    public TextureFormat TextureFormat { get; set; } = TextureFormat.Jpeg;
 
     public MeshT(IEnumerable<Vertex3> vertices, IEnumerable<Vertex2> textureVertices,
         IEnumerable<FaceT> faces, IEnumerable<Material> materials, IEnumerable<RGB>? vertexColors = null)
@@ -545,7 +557,63 @@ public class MeshT : IMesh
         });
     }
 
-    private static readonly string[] JpegExtensions = { ".jpg", ".jpeg" };
+    private JpegEncoder CreateEncoder() => new JpegEncoder { Quality = Math.Clamp(TextureQuality, 1, 100) };
+
+    /// <summary>
+    /// Output file extension for a repacked atlas, honoring the selected texture format. Normal maps
+    /// are always PNG regardless of format/strategy - see <see cref="SaveAtlas"/>.
+    /// </summary>
+    private string AtlasExtension(string sourcePath, bool isNormalMap)
+        => isNormalMap ? ".png"
+           : TextureFormat == TextureFormat.Webp ? ".webp"
+           : (TexturesStrategy == TexturesStrategy.Repack ? Path.GetExtension(sourcePath) : ".jpg");
+
+    /// <summary>
+    /// Saves a repacked atlas with the encoder matching the current strategy and format.
+    /// WebP is always encoded lossy at TextureQuality; for the classic formats Repack is lossless
+    /// (original format) and RepackCompressed is lossy JPEG. Normal maps are always saved losslessly
+    /// (PNG), ignoring TextureFormat/TexturesStrategy: JPEG/WebP lossy compression corrupts the
+    /// directional data encoded in the RGB channels, producing visible lighting artifacts even
+    /// though the diffuse texture tolerates it fine.
+    /// </summary>
+    private void SaveAtlas(Image image, string path, bool isNormalMap)
+    {
+        if (isNormalMap)
+            image.SaveAsPng(path);
+        else if (TextureFormat == TextureFormat.Webp)
+        {
+            // Always lossy: lossless WebP of an already-lossy source (e.g. a JPEG source atlas) can be
+            // larger than the source and defeat the purpose. Lossy WebP at TextureQuality is smaller
+            // than both PNG and JPEG at comparable quality.
+            image.SaveAsWebp(path, new WebpEncoder { FileFormat = WebpFileFormatType.Lossy, Quality = Math.Clamp(TextureQuality, 1, 100) });
+        }
+        else if (TexturesStrategy == TexturesStrategy.Repack)
+            image.Save(path);
+        else
+            image.SaveAsJpeg(path, CreateEncoder());
+    }
+
+    /// <summary>
+    /// Downscales an image in place so that neither side exceeds MaxTextureSize (when set), after
+    /// applying TextureDownscale. Used by the Compress strategy (e.g. the tileset root tile) so its
+    /// textures are not stored at full source resolution.
+    /// </summary>
+    private void ApplyTextureSizeLimit(Image image)
+    {
+        var s = Math.Clamp(TextureDownscale, float.Epsilon, 1.0f);
+        if (MaxTextureSize > 0)
+        {
+            int maxDim = Math.Max(image.Width, image.Height);
+            if (maxDim * s > MaxTextureSize)
+                s = Math.Clamp(MaxTextureSize / (float)maxDim, float.Epsilon, 1.0f);
+        }
+        if (s < 1.0f)
+        {
+            int w = Math.Max(1, (int)(image.Width * s));
+            int h = Math.Max(1, (int)(image.Height * s));
+            image.Mutate(x => x.Resize(w, h));
+        }
+    }
 
     private void BinPackTextures(string targetFolder, int materialIndex, IReadOnlyList<List<int>> clusters,
         IDictionary<Vertex2, int> newTextureVertices, ICollection<Task> tasks)
@@ -566,6 +634,16 @@ public class MeshT : IMesh
         int textureHeight = material.Texture != null ? texture!.Height : normalMap!.Height;
 
         float scale = Math.Clamp(TextureDownscale, float.Epsilon, 1.0f);
+
+        // Absolute cap: never repack an atlas from a source resolution larger than MaxTextureSize
+        // per side. This bounds the dominant LOD-0 texture cost. 0 disables the cap.
+        if (MaxTextureSize > 0)
+        {
+            int maxSrcDim = Math.Max(textureWidth, textureHeight);
+            if (maxSrcDim * scale > MaxTextureSize)
+                scale = Math.Clamp(MaxTextureSize / (float)maxSrcDim, float.Epsilon, 1.0f);
+        }
+
         int effWidth  = Math.Max(1, (int)(textureWidth  * scale));
         int effHeight = Math.Max(1, (int)(textureHeight * scale));
 
@@ -645,18 +723,18 @@ public class MeshT : IMesh
             if (packRect.Width == 0)
             {
                 textureFileName = material.Texture != null
-                    ? $"{Name}-texture-diffuse-{material.Name}{Path.GetExtension(material.Texture)}" : null;
+                    ? $"{Name}-texture-diffuse-{materialIndex}-{material.Name}{AtlasExtension(material.Texture, false)}" : null;
                 normalMapFileName = material.NormalMap != null
-                    ? $"{Name}-texture-normal-{material.Name}{Path.GetExtension(material.NormalMap)}" : null;
+                    ? $"{Name}-texture-normal-{materialIndex}-{material.Name}{AtlasExtension(material.NormalMap, true)}" : null;
 
                 if (material.Texture != null) {
                     newPathTexture = Path.Combine(targetFolder, textureFileName!);
-                    newTexture!.Save(newPathTexture); newTexture!.Dispose();
+                    SaveAtlas(newTexture!, newPathTexture, false); newTexture!.Dispose();
                 }
 
                 if (material.NormalMap != null) {
                     newPathNormalMap = Path.Combine(targetFolder, normalMapFileName!);
-                    newNormalMap!.Save(newPathNormalMap);
+                    SaveAtlas(newNormalMap!, newPathNormalMap, true);
                     newNormalMap!.Dispose();
                 }
 
@@ -746,54 +824,30 @@ public class MeshT : IMesh
             }
         }
 
-        // ---------- saving (unchanged) ----------
+        // ---------- saving ----------
         if (material.Texture != null)
         {
-            textureFileName = TexturesStrategy == TexturesStrategy.Repack
-                ? $"{Name}-texture-diffuse-{material.Name}{Path.GetExtension(material.Texture)}"
-                : $"{Name}-texture-diffuse-{material.Name}.jpg";
+            textureFileName = $"{Name}-texture-diffuse-{materialIndex}-{material.Name}{AtlasExtension(material.Texture, false)}";
             newPathTexture = Path.Combine(targetFolder, textureFileName);
         }
 
         if (material.NormalMap != null)
         {
-            // Normal maps are always saved losslessly (PNG): JPEG chroma subsampling
-            // corrupts the directional data encoded in the RGB channels, producing
-            // visible lighting artifacts even though the diffuse texture tolerates it fine.
-            normalMapFileName = $"{Name}-texture-normal-{material.Name}.png";
+            normalMapFileName = $"{Name}-texture-normal-{materialIndex}-{material.Name}{AtlasExtension(material.NormalMap, true)}";
             newPathNormalMap = Path.Combine(targetFolder, normalMapFileName);
         }
 
         var saveTaskTexture = new Task(t =>
         {
             var tx = (Image<Rgba32>)t!;
-            switch (TexturesStrategy)
-            {
-                case TexturesStrategy.RepackCompressed:
-                    tx.SaveAsJpeg(newPathTexture!, new JpegEncoder { Quality = JpegQuality });
-                    break;
-                case TexturesStrategy.Repack:
-                    if (JpegExtensions.Contains(Path.GetExtension(newPathTexture!), StringComparer.OrdinalIgnoreCase))
-                        tx.SaveAsJpeg(newPathTexture!, new JpegEncoder { Quality = JpegQuality });
-                    else
-                        tx.Save(newPathTexture!);
-                    break;
-                default: throw new InvalidOperationException("KeepOriginal/Compress are meaningless here");
-            }
+            SaveAtlas(tx, newPathTexture!, false);
             tx.Dispose();
         }, newTexture, TaskCreationOptions.LongRunning);
 
         var saveTaskNormalMap = new Task(t =>
         {
             var tx = (Image<Rgba32>)t!;
-            switch (TexturesStrategy)
-            {
-                case TexturesStrategy.RepackCompressed:
-                case TexturesStrategy.Repack:
-                    tx.Save(newPathNormalMap!); // always lossless, see comment above
-                    break;
-                default: throw new InvalidOperationException("KeepOriginal/Compress are meaningless here");
-            }
+            SaveAtlas(tx, newPathNormalMap!, true);
             tx.Dispose();
         }, newNormalMap, TaskCreationOptions.LongRunning);
 
@@ -1478,7 +1532,7 @@ public class MeshT : IMesh
                                 var folder = Path.GetDirectoryName(path);
 
                                 var textureFileName =
-                                    $"{Path.GetFileNameWithoutExtension(path)}-texture-{index}.jpg";
+                                    $"{Path.GetFileNameWithoutExtension(path)}-texture-{index}{(TextureFormat == TextureFormat.Webp ? ".webp" : ".jpg")}";
 
                                 var newTexturePath =
                                     folder != null ? Path.Combine(folder, textureFileName) : textureFileName;
@@ -1491,7 +1545,11 @@ public class MeshT : IMesh
 
                                 using (var image = Image.Load(material.Texture))
                                 {
-                                    image.SaveAsJpeg(newTexturePath, new JpegEncoder { Quality = JpegQuality });
+                                    ApplyTextureSizeLimit(image);
+                                    if (TextureFormat == TextureFormat.Webp)
+                                        image.SaveAsWebp(newTexturePath, new WebpEncoder { FileFormat = WebpFileFormatType.Lossy, Quality = Math.Clamp(TextureQuality, 1, 100) });
+                                    else
+                                        image.SaveAsJpeg(newTexturePath, CreateEncoder());
                                 }
 
                                 material.Texture = textureFileName;
@@ -1607,4 +1665,11 @@ public enum TexturesStrategy
     Compress,
     Repack,
     RepackCompressed
+}
+
+public enum TextureFormat
+{
+    Jpeg,
+    Webp,
+    Ktx2
 }

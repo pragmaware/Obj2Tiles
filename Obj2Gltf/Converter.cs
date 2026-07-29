@@ -81,7 +81,7 @@ namespace SilentWave.Obj2Gltf
                     ConvertMaterial(x, t => GetTextureIndex(gltfModel, t), options.UnlitMaterials)));
 
                 if (options.UnlitMaterials)
-                    gltfModel.ExtensionsUsed = new List<string> { "KHR_materials_unlit" };
+                    gltfModel.UseExtension("KHR_materials_unlit", required: false);
 
                 var meshes = objModel.Geometries.ToArray();
                 var meshesLength = meshes.Length;
@@ -103,6 +103,12 @@ namespace SilentWave.Obj2Gltf
                     WrapS = TextureWrappingMode.Repeat,
                     WrapT = TextureWrappingMode.Repeat
                 });
+            }
+
+            if (options.EncodeKtx2 && gltfModel.Images.Count > 0)
+            {
+                var gltfDir = Path.GetDirectoryName(outputFile) ?? ".";
+                Ktx2.Ktx2GltfProcessor.Apply(gltfModel, gltfDir, options);
             }
 
             WriteFile(gltfModel, outputFile);
@@ -168,9 +174,24 @@ namespace SilentWave.Obj2Gltf
             var t = new Gltf.Texture
             {
                 Name = textureFilename,
-                Source = imageIndex,
                 Sampler = 0
             };
+
+            // WebP textures are referenced through EXT_texture_webp. With no PNG/JPEG fallback the
+            // base "source" is omitted and the extension is marked as required.
+            if (textureFilename.EndsWith(".webp", StringComparison.OrdinalIgnoreCase))
+            {
+                t.Extensions = new TextureExtensions
+                {
+                    EXT_texture_webp = new ExtTextureWebp { Source = imageIndex }
+                };
+                gltfModel.UseExtension("EXT_texture_webp", required: true);
+            }
+            else
+            {
+                t.Source = imageIndex;
+            }
+
             gltfModel.Textures.Add(t);
             return textureIndex;
         }
@@ -673,9 +694,16 @@ namespace SilentWave.Obj2Gltf
 
         private static float SrgbChannelToLinear(float c)
         {
+            float linear;
             if (c <= 0.04045f)
-                return c / 12.92f;
-            return (float)Math.Pow((c + 0.055) / 1.055, 2.4);
+                linear = c / 12.92f;
+            else
+                linear = (float)Math.Pow((c + 0.055) / 1.055, 2.4);
+
+            // glTF COLOR_0 accessors with float components must be in [0,1].
+            // Clamp so a source vertex color slightly outside the range (e.g. from
+            // mesh decimation) never produces an out-of-range accessor element.
+            return linear < 0f ? 0f : (linear > 1f ? 1f : linear);
         }
 
         #endregion sRGB to Linear

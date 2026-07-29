@@ -15,14 +15,41 @@ public static partial class StagesFacade
     public static void Tile(string sourcePath, string destPath, int lods, double? baseError, Dictionary<string, TileBounds>[] boundsMapper,
         GpsCoords? coords = null, bool localMode = false, bool isOctree = false,
         ErrorEstimationMode errorEstimationMode = ErrorEstimationMode.AverageEdgeLength, double? errorFactor = null,
-        bool useGlb = false, double lodTextureScale = 1.0, bool unlit = false)
+        bool useGlb = false, double lodTextureScale = 1.0, string? rootSourceObj = null, GltfConverterOptions? gltfOptions = null)
     {
 
         Console.WriteLine(" ?> Working on objs conversion");
 
         var tileExtension = useGlb ? ".glb" : ".b3dm";
 
-        ConvertAllTiles(sourcePath, destPath, lods, useGlb, unlit);
+        ConvertAllTiles(sourcePath, destPath, lods, useGlb, gltfOptions);
+
+        // Give the tileset root renderable content. The root tile spans the whole model but, in an
+        // octree/multi-tile layout, its geometry lives only in the child tiles, leaving the root
+        // empty (content: null). An empty root is legal per the 3D Tiles spec, but several renderers
+        // (e.g. giro3d's 3d-tiles-renderer, which hardcodes LOAD_ROOT_SIBLINGS) will not descend into
+        // the children of a content-less root, so the whole model never appears. Converting the
+        // coarsest decimated whole-model mesh into a root tile gives the root a lightweight, complete
+        // representation that is then refined (REPLACE) by the finer child tiles.
+        string? rootContentUri = null;
+        if (rootSourceObj != null && File.Exists(rootSourceObj))
+        {
+            try
+            {
+                var rootFileName = "root" + tileExtension;
+                var rootTile = Path.Combine(destPath, rootFileName);
+                if (useGlb)
+                    Utils.ConvertGlb(rootSourceObj, rootTile, gltfOptions);
+                else
+                    Utils.ConvertB3dm(rootSourceObj, rootTile, gltfOptions);
+                rootContentUri = rootFileName;
+                Console.WriteLine($" ?> Generated root content from '{Path.GetFileName(rootSourceObj)}'");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($" !> Could not generate root content ({ex.Message}); the root tile will be empty.");
+            }
+        }
 
         Console.WriteLine(" -> Generating tileset.json");
 
@@ -70,8 +97,13 @@ public static partial class StagesFacade
             Root = new TileElement
             {
                 GeometricError = rootGeometricError,
-                Refine = "ADD",
+                // Use REPLACE only when the root has actual content (coarse whole-model mesh):
+                // the root is superseded by the finer child tiles so the two never render on top
+                // of each other. Fall back to ADD when root content generation failed or was not
+                // requested, so children are still rendered additively from a content-less root.
+                Refine = rootContentUri != null ? "REPLACE" : "ADD",
                 Transform = rootTransform,
+                Content = rootContentUri != null ? new Content { Uri = rootContentUri } : null,
             }
         };
 
@@ -313,7 +345,7 @@ public static partial class StagesFacade
         return totalFaces == 0 ? 0 : weightedSum / totalFaces;
     }
 
-    private static void ConvertAllTiles(string sourcePath, string destPath, int lods, bool useGlb, bool unlit = false)
+    private static void ConvertAllTiles(string sourcePath, string destPath, int lods, bool useGlb, GltfConverterOptions? gltfOptions = null)
     {
         var tileExtension = useGlb ? ".glb" : ".b3dm";
         var filesToConvert = new List<Tuple<string, string>>();
@@ -337,9 +369,9 @@ public static partial class StagesFacade
             Console.WriteLine($" -> Converting to {tileExtension.TrimStart('.')} '{file.Item1}'");
 
             if (useGlb)
-                Utils.ConvertGlb(file.Item1, file.Item2, unlit);
+                Utils.ConvertGlb(file.Item1, file.Item2, gltfOptions);
             else
-                Utils.ConvertB3dm(file.Item1, file.Item2, unlit);
+                Utils.ConvertB3dm(file.Item1, file.Item2, gltfOptions);
         });
     }
 
