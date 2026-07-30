@@ -46,8 +46,7 @@ public class Vertex3
 
     public static bool operator !=(Vertex3 a, Vertex3 b)
     {
-        return Math.Abs(a.X - b.X) > Common.Epsilon ||
-               Math.Abs(a.Y - b.Y) > Common.Epsilon && Math.Abs(a.Z - b.Z) > Common.Epsilon;
+        return !(a == b);
     }
 
     public double Distance(Vertex3 other)
