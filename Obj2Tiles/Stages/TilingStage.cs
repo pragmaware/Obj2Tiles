@@ -393,10 +393,10 @@ public enum ErrorEstimationMode
     /// <summary>Each tile's error is its own bounding-box diagonal times --error-factor (default 0.1).</summary>
     BoundingBoxDiagonal,
 
-    /// <summary>Each tile's error is its own average triangle edge length times --error-factor (default 0.5).</summary>
+    /// <summary>Each tile's error is its own average triangle edge length times --error-factor (default 1.0).</summary>
     AverageEdgeLength,
 
-    /// <summary>Each tile's error is its own maximum triangle edge length times --error-factor (default 0.5).</summary>
+    /// <summary>Each tile's error is its own maximum triangle edge length times --error-factor (default 1.0).</summary>
     MaximumEdgeLength,
 
     /// <summary>
@@ -407,12 +407,12 @@ public enum ErrorEstimationMode
 
     /// <summary>
     /// The root's error is the coarsest LOD's (face-weighted) average edge length times --error-factor
-    /// (default 0.5); every tile's error is then that root value halved once per LOD subdivision from the root.
+    /// (default 1.0); every tile's error is then that root value halved once per LOD subdivision from the root.
     /// </summary>
     ToplevelAverageEdgeLength,
 
     /// <summary>
-    /// The root's error is the coarsest LOD's maximum edge length times --error-factor (default 0.5);
+    /// The root's error is the coarsest LOD's maximum edge length times --error-factor (default 1.0);
     /// every tile's error is then that root value halved once per LOD subdivision from the root.
     /// </summary>
     ToplevelMaximumEdgeLength

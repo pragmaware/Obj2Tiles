@@ -209,8 +209,8 @@ public enum DecimationMode
 
     /// <summary>
     /// Preserves UV seam and foldover edges (avoiding texture-mapping artifacts) when the
-    /// mesh has textures and the quality target is above 0.2; otherwise behaves like
-    /// <see cref="Aggressive"/>.
+    /// mesh has textures, or when the quality target is above 0.5 even without textures;
+    /// otherwise behaves like <see cref="Aggressive"/>.
     /// </summary>
     Standard,
 

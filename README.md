@@ -62,7 +62,7 @@ Controls how repacked texture atlases are encoded.
 |-----------|---------|-------------|---------|
 | `--texture-format` | `Jpeg` | Output format for repacked textures: `Jpeg` (default), `Webp` (25-35% smaller, emits `EXT_texture_webp`), or `Ktx2` (GPU-compressed Basis Universal, emits `KHR_texture_basisu`, cuts VRAM 4-8x - see [KTX2 GPU Texture Compression](#ktx2-gpu-texture-compression)) | `--texture-format Ktx2` |
 | `--texture-quality` | `75` | JPEG/WebP quality (1-100). Higher is better quality but larger files. Only for `Jpeg` and `Webp` formats | `--texture-quality 90` |
-| `--fine-texture-quality` | `0` | JPEG quality (1-100) for LOD-0 (the finest LOD) only. `0` (default) falls back to `--texture-quality` for LOD-0 too | `--fine-texture-quality 95` |
+| `--fine-texture-quality` | `0` | JPEG/WebP quality (1-100) for LOD-0 (the finest LOD) only. `0` (default) falls back to `--texture-quality` for LOD-0 too | `--fine-texture-quality 95` |
 | `--max-texture-size` | `4096` | Maximum texture atlas resolution per side (pixels). Source textures larger than this are downscaled. `0` disables the cap | `--max-texture-size 2048` |
 | `--ktx2-quality` | `128` | KTX2 ETC1S/BasisLZ quality (1-255; higher = better quality, larger files). Reinterpreted as UASTC quality (0-4) when `--ktx2-uastc` is set. Only used with `--texture-format Ktx2` | `--ktx2-quality 200` |
 | `--ktx2-uastc` | `false` | Use UASTC instead of ETC1S/BasisLZ for KTX2 textures. UASTC transcodes to BC7/ASTC for near-lossless quality at ~3x the size of ETC1S. Only used with `--texture-format Ktx2` | `--ktx2-uastc` |
@@ -105,7 +105,7 @@ By default Obj2Tiles writes a loose folder tree (`tileset.json`, `LOD-*/` and `r
 |-----------|---------|-------------|---------|
 | `-e, --error` |  | Base geometric error value for the root tile in `tileset.json`. If omitted, it's auto-computed from the coarsest LOD via `--error-estimation-mode`/`--error-factor` | `--error 500` |
 | `--error-estimation-mode` | `AverageEdgeLength` | How geometric error is estimated: `BoundingBoxDiagonal`, `AverageEdgeLength`, `MaximumEdgeLength` compute each tile's error from that tile's own geometry (bounding-box diagonal, or average/maximum triangle edge length, times `--error-factor`). Below 4 faces, `AverageEdgeLength`/`MaximumEdgeLength` fall back to `bounding-box diagonal * 0.1` since an edge-length estimate isn't meaningful. The `Toplevel*` variants instead compute one value at the root from the coarsest LOD using the same metric, then halve it once per LOD subdivision | `--error-estimation-mode MaximumEdgeLength` |
-| `--error-factor` | `0.1` (`*BoundingBoxDiagonal`) / `0.5` (`*AverageEdgeLength`, `*MaximumEdgeLength`) | Multiplier applied to the metric selected by `--error-estimation-mode` | `--error-factor 0.3` |
+| `--error-factor` | `0.1` (`*BoundingBoxDiagonal`) / `1.0` (`*AverageEdgeLength`, `*MaximumEdgeLength`) | Multiplier applied to the metric selected by `--error-estimation-mode` | `--error-factor 0.3` |
 | `--use-system-temp` | `false` | Use the system temp folder for intermediate files instead of the output folder | `--use-system-temp` |
 | `--keep-intermediate` | `false` | Keep intermediate files (decimated OBJs, split tiles) for debugging | `--keep-intermediate` |
 | `--help` |  | Display help screen | `--help` |
