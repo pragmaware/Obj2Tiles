@@ -66,6 +66,8 @@ Controls how repacked texture atlases are encoded.
 | `--max-texture-size` | `4096` | Maximum texture atlas resolution per side (pixels). Source textures larger than this are downscaled. `0` disables the cap | `--max-texture-size 2048` |
 | `--ktx2-quality` | `128` | KTX2 ETC1S/BasisLZ quality (1-255; higher = better quality, larger files). Reinterpreted as UASTC quality (0-4) when `--ktx2-uastc` is set. Only used with `--texture-format Ktx2` | `--ktx2-quality 200` |
 | `--ktx2-uastc` | `false` | Use UASTC instead of ETC1S/BasisLZ for KTX2 textures. UASTC transcodes to BC7/ASTC for near-lossless quality at ~3x the size of ETC1S. Only used with `--texture-format Ktx2` | `--ktx2-uastc` |
+| `--ktx2-threads` | `0` | Number of libktx encoder threads per texture. `0` preserves the current default of one encoder thread per texture; positive values require `--texture-format Ktx2` | `--ktx2-threads 4` |
+| `--ktx2-zstd-level` | `0` | Zstandard supercompression level for UASTC KTX2 textures (`1`-`22`; `0` disables). Requires `--texture-format Ktx2` and `--ktx2-uastc`; levels above `20` use substantially more memory | `--ktx2-zstd-level 18` |
 | `--ktx-path` |  | Path to the libktx native library or its directory. When omitted, resolved from `OBJ2TILES_KTX`, then the executable directory (where the bundled lib lives), then system `PATH`. Only used with `--texture-format Ktx2` | `--ktx-path /usr/lib/libktx.so` |
 
 ### Geo-referencing
@@ -87,6 +89,7 @@ By default Obj2Tiles writes a loose folder tree (`tileset.json`, `LOD-*/` and `r
 |-----------|---------|-------------|---------|
 | `--3tz` | `false` | Produce a single `.3tz` archive instead of a folder tree (implied by a `.3tz` output path). When set without a `.3tz` extension, the archive is written to `<output>.3tz` | `--3tz` |
 | `--3tz-compression` | `6` | DEFLATE level for `.3tz` content, `0`-`9` (gzip-style), see table below. The index is always stored uncompressed | `--3tz-compression 9` |
+| `--no-root-content` | `false` | Omit `root.b3dm` and emit a legal contentless tileset root. Useful when only separately audited child tiles should be published, but requires a renderer that descends into children of contentless roots | `--no-root-content` |
 
 **Compression levels (`--3tz-compression`):**
 
@@ -192,6 +195,10 @@ The `--texture-format Ktx2` option encodes every texture atlas as **KTX2 with Ba
 | **ETC1S / BasisLZ** (default) | *(none)* | `--ktx2-quality 1-255` | ETC2, BC1/BC3, PVRTC | Smallest files, maximum hardware compatibility |
 | **UASTC** | `--ktx2-uastc` | `--ktx2-quality 0-4` | BC7, ASTC, ETC2 | Near-lossless quality, ~3x larger than ETC1S |
 
+Obj2Tiles already converts multiple tiles concurrently. `--ktx2-threads N` additionally gives each active texture encode `N` libktx worker threads; leave it at `0` to retain the current one-thread-per-texture behavior, or raise it cautiously to avoid oversubscribing the machine.
+
+UASTC data can optionally be losslessly supercompressed with Zstandard by setting `--ktx2-zstd-level 1-22`. Higher levels trade encoding time and memory for smaller files; levels above 20 require substantially more memory. ETC1S already uses BasisLZ supercompression and cannot be combined with Zstandard.
+
 **Renderer requirements:**
 
 Not all renderers support `KHR_texture_basisu`. Verified to work: CesiumJS, CesiumNative, Babylon.js, three.js (with `KTX2Loader`), and most WebGPU-capable renderers. Use `--texture-format Jpeg` (the default) for environments where `KHR_texture_basisu` support is uncertain.
@@ -269,6 +276,12 @@ UASTC mode for near-lossless quality targeting BC7/ASTC renderers (larger files)
 
 ```bash
 Obj2Tiles --texture-format Ktx2 --ktx2-uastc --ktx2-quality 3 --local model.obj ./output
+```
+
+Add lossless Zstandard supercompression to UASTC output:
+
+```bash
+Obj2Tiles --texture-format Ktx2 --ktx2-uastc --ktx2-quality 3 --ktx2-zstd-level 18 --local model.obj ./output
 ```
 
 Cap atlas size to 2048 px and raise JPEG quality for the default format:

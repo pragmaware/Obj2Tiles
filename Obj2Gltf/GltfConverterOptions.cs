@@ -51,9 +51,14 @@ namespace SilentWave.Obj2Gltf
         public int Ktx2CompressionLevel { get; set; } = 1;
 
         /// <summary>
-        /// Number of encoder threads per ktx invocation. 0 lets ktx pick (hardware concurrency).
+        /// Number of encoder threads per KTX2 texture. 0 preserves the current single-threaded default.
         /// </summary>
         public int Ktx2Threads { get; set; } = 0;
+
+        /// <summary>
+        /// Zstandard supercompression level [1,22] for UASTC KTX2 textures. 0 disables it.
+        /// </summary>
+        public int Ktx2ZstdLevel { get; set; } = 0;
 
         /// <summary>
         /// Optional path to the native KTX-Software library (libktx: ktx.dll / libktx.so / libktx.dylib)

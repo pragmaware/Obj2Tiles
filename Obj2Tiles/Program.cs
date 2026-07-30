@@ -195,7 +195,7 @@ namespace Obj2Tiles
                 // which keeps it as a single mesh but compresses its textures, so the bootstrap root tile
                 // stays small instead of embedding the full-resolution source textures.
                 string? rootSourceObj = null;
-                if (decimateRes.DestFiles.Length > 0)
+                if (!opts.NoRootContent && decimateRes.DestFiles.Length > 0)
                 {
                     rootSourceObj = decimateRes.DestFiles[^1];
                     try
@@ -250,6 +250,8 @@ namespace Obj2Tiles
                     gltfOptions.EncodeKtx2 = true;
                     gltfOptions.Ktx2Uastc = opts.Ktx2Uastc;
                     gltfOptions.Ktx2QualityLevel = opts.Ktx2Quality;
+                    gltfOptions.Ktx2Threads = opts.Ktx2Threads;
+                    gltfOptions.Ktx2ZstdLevel = opts.Ktx2ZstdLevel;
                     gltfOptions.KtxToolPath = opts.KtxPath;
                 }
 
@@ -379,6 +381,36 @@ namespace Obj2Tiles
             if (opts.LodTextureScale is <= 0 or > 1)
             {
                 Console.WriteLine(" !> --lod-texture-scale must be in the (0, 1] range");
+                return false;
+            }
+
+            if (opts.Ktx2Threads < 0)
+            {
+                Console.WriteLine(" !> --ktx2-threads must be non-negative (0 preserves the current default)");
+                return false;
+            }
+
+            if (opts.Ktx2Threads > 0 && opts.TextureFormat != TextureFormat.Ktx2)
+            {
+                Console.WriteLine(" !> --ktx2-threads requires --texture-format Ktx2");
+                return false;
+            }
+
+            if (opts.Ktx2ZstdLevel is < 0 or > 22)
+            {
+                Console.WriteLine(" !> --ktx2-zstd-level must be 0 (disabled) or between 1 and 22");
+                return false;
+            }
+
+            if (opts.Ktx2ZstdLevel > 0 && opts.TextureFormat != TextureFormat.Ktx2)
+            {
+                Console.WriteLine(" !> --ktx2-zstd-level requires --texture-format Ktx2");
+                return false;
+            }
+
+            if (opts.Ktx2ZstdLevel > 0 && !opts.Ktx2Uastc)
+            {
+                Console.WriteLine(" !> --ktx2-zstd-level requires --ktx2-uastc");
                 return false;
             }
 

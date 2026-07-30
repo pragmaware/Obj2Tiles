@@ -101,6 +101,9 @@ namespace SilentWave.Obj2Gltf.Ktx2
         [DllImport("ktx", CallingConvention = CallingConvention.Cdecl)]
         private static extern int ktxTexture2_CompressBasisEx(IntPtr texture, ref KtxBasisParams parameters);
 
+        [DllImport("ktx", CallingConvention = CallingConvention.Cdecl)]
+        private static extern int ktxTexture2_DeflateZstd(IntPtr texture, uint compressionLevel);
+
         // libktx decodes this path with MultiByteToWideChar(CP_UTF8, ...) on Windows and passes it
         // straight to fopen on other platforms, so it must be marshalled as UTF-8 (not the ANSI LPStr).
         [DllImport("ktx", CallingConvention = CallingConvention.Cdecl)]
@@ -201,6 +204,11 @@ namespace SilentWave.Obj2Gltf.Ktx2
         /// <param name="options">Encoder options.</param>
         public static void Encode(string inputImagePath, string outputKtx2Path, bool srgb, GltfConverterOptions options)
         {
+            if (options.Ktx2ZstdLevel is < 0 or > 22)
+                throw new ArgumentOutOfRangeException(nameof(options.Ktx2ZstdLevel), "KTX2 Zstd level must be 0 or between 1 and 22.");
+            if (options.Ktx2ZstdLevel > 0 && !options.Ktx2Uastc)
+                throw new InvalidOperationException("KTX2 Zstd supercompression requires UASTC.");
+
             Gate.Wait();
             try
             {
@@ -252,6 +260,22 @@ namespace SilentWave.Obj2Gltf.Ktx2
                     var basisParams = BuildParams(options);
                     err = ktxTexture2_CompressBasisEx(texture, ref basisParams);
                     Check(err, "ktxTexture2_CompressBasisEx");
+
+                    if (options.Ktx2ZstdLevel > 0)
+                    {
+                        try
+                        {
+                            err = ktxTexture2_DeflateZstd(texture, (uint)options.Ktx2ZstdLevel);
+                        }
+                        catch (EntryPointNotFoundException ex)
+                        {
+                            throw new InvalidOperationException(
+                                "KTX2 Zstd supercompression was requested (--ktx2-zstd-level) but the loaded " +
+                                "libktx does not export ktxTexture2_DeflateZstd. Upgrade libktx to a build with " +
+                                "Zstd supercompression support, or disable --ktx2-zstd-level.", ex);
+                        }
+                        Check(err, "ktxTexture2_DeflateZstd");
+                    }
 
                     var outputDir = Path.GetDirectoryName(outputKtx2Path);
                     if (!string.IsNullOrEmpty(outputDir))

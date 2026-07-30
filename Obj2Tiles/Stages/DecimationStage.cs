@@ -107,7 +107,7 @@ public static partial class StagesFacade
                 maxIterations = 100;
                 break;
             case DecimationMode.Quality:
-                // Note: this is substantially equivalent to 
+                // Note: this is substantially equivalent to
                 // enableSmartLink = true, preserveUVSeamEdges = true, preserveUVFoldoverEdges = true
                 // ... but faster.
                 enableSmartLink = false;
