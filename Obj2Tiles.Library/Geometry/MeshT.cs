@@ -1609,6 +1609,7 @@ public class MeshT : IMesh
 
                                 using (var image = Image.Load(material.NormalMap))
                                 {
+                                    ApplyTextureSizeLimit(image);
                                     image.SaveAsPng(newNormalMapPath);
                                 }
 
