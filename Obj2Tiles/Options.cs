@@ -19,7 +19,7 @@ public sealed class Options
     [Option('p', "preset", Required = false, HelpText = "Applies a bundle of option defaults. 'legacy' sets --no-zsplit --no-octree --lod-texture-scale 1.0. 'standard' sets --octree --local --zsplit --lod-texture-scale 0.5 --decimation-mode Quality --glb --texture-quality 80 --fine-texture-quality 90 --max-texture-size 8192. Any of these options given explicitly on the command line take precedence over the preset.", Default = Preset.None)]
     public Preset Preset { get; set; }
 
-    [Option('d', "divisions", Required = false, HelpText = "How many tiles divisions", Default = 2)]
+    [Option('d', "divisions", Required = false, HelpText = "How many levels of spatial splitting the coarsest LOD sits at (with --octree, each finer LOD gets one extra level; without it, every LOD uses this same depth). See README.md for how this determines the number of tiles.", Default = 2)]
     public int Divisions { get; set; }
 
     [Option('z', "zsplit", Required = false, HelpText = "Splits along z-axis too", Default = false)]

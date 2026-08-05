@@ -47,7 +47,7 @@ Obj2Tiles [options] <input.obj> <output>
 
 | Parameter | Default | Description | Example |
 |-----------|---------|-------------|---------|
-| `-d, --divisions` | `2` | Recursion depth for binary splitting along each axis. Each level doubles the grid, producing `(2^divisions)^2` tiles along XY (or `(2^divisions)^3` with `--zsplit`). For example, `--divisions 2` gives a 4x4 grid (16 tiles) and `--divisions 3` gives 8x8 (64 tiles) | `--divisions 3` |
+| `-d, --divisions` | `2` | Recursion depth for binary splitting along each axis - in `--octree` mode, the depth of the coarsest LOD specifically. See [Tile count](#tile-count) for how this determines the number of tiles | `--divisions 3` |
 | `-z, --zsplit` | `false` | Also split along the Z-axis (not just X and Y) | `--zsplit` |
 | `-g, --split-strategy` | `VertexBaricenter` | How the split point is computed: `AbsoluteCenter` (bounding box center), `VertexBaricenter` (vertex average), or `VertexMedian` (vertex median, most balanced) | `--split-strategy VertexMedian` |
 | `-k, --keeptextures` | `false` | Keep original textures instead of repacking them (not recommended) | `--keeptextures` |
@@ -141,15 +141,35 @@ For every decimated mesh, the program splits it recursively along the X and Y ax
 
 **Octree mode** (`--octree`):
 
-By default, every LOD produces the same number of tiles arranged as per-tile chains in `tileset.json`. With `--octree`, each LOD receives one additional division level compared to the next coarser LOD. The per-LOD split depth formula is `lodDivisions = divisions + lods - index - 1` (fine LODs get deeper splits). The grid at depth D is $(2^D)^2$ tiles:
+By default, every LOD produces the same number of tiles arranged as per-tile chains in `tileset.json`. With `--octree`, each LOD receives one additional division level compared to the next coarser LOD, and coarser tiles become spatial parents of finer ones - a proper tree hierarchy instead of flat chains. Combine `--octree` with `--zsplit` for a true 8-way octree.
 
-| LOD | LOD depth (`--divisions 2`, 3 LODs) | Grid | Tiles (XY) |
-|-----|-------------------------------------|------|------------|
-| 0 (finest) | 2+3-0-1 = 4 | 16x16 | 256 |
-| 1 | 2+3-1-1 = 3 | 8x8 | 64 |
-| 2 (coarsest) | 2+3-2-1 = 2 | 4x4 | 16 |
+#### Tile count
 
-Coarser tiles become spatial parents of finer ones in `tileset.json`, producing a proper tree hierarchy. Combine `--octree` with `--zsplit` for a true 8-way octree.
+Every split level bisects the mesh along X and Y (and Z with `--zsplit`), so each level multiplies the tile count by a fixed **branching factor** `b`:
+
+- `b = 4` normally (a level splits into 4 quadrants: X × Y)
+- `b = 8` with `--zsplit` (a level splits into 8 octants: X × Y × Z)
+
+**Without `--octree`:** every LOD is split to the same depth, `--divisions`. Tiles per LOD = `b^divisions`.
+
+**With `--octree`:** `--divisions` sets the depth of the *coarsest* LOD, not the finest - each LOD one step finer adds one more level. For a run with `lods` LODs (indexed `0` = finest .. `lods-1` = coarsest):
+
+```
+depth(LOD i) = divisions + (lods - 1 - i)
+tiles(LOD i) = b ^ depth(LOD i)
+```
+
+So the coarsest LOD (`i = lods-1`) sits at exactly `divisions` levels, and the finest LOD sits `lods-1` levels deeper. Example with `--divisions 2 --lods 3`:
+
+| LOD | depth (no `--zsplit`, b=4) | tiles | depth (`--zsplit`, b=8) | tiles |
+|-----|------|-------|------|-------|
+| 0 (finest) | 2+3-0-1 = 4 | 4⁴ = 256 | 4 | 8⁴ = 4096 |
+| 1 | 2+3-1-1 = 3 | 4³ = 64 | 3 | 8³ = 512 |
+| 2 (coarsest) | 2+3-2-1 = 2 | 4² = 16 | 2 | 8² = 64 |
+
+A common surprise: with the default `--divisions 2`, the coarsest LOD already sits two levels deep (16 or 64 tiles), not one (4 or 8). To make the coarsest LOD a single first-level split, use `--divisions 1`.
+
+These formulas are upper bounds - branches with no geometry are pruned, so sparse or unevenly-distributed models produce fewer tiles in practice.
 
 **Texture downscaling** (`--lod-texture-scale`):
 
