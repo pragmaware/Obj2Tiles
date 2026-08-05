@@ -99,7 +99,8 @@ public static partial class StagesFacade
         TexturesStrategy textureStrategy = TexturesStrategy.Repack,
         SplitPointStrategy splitPointStrategy = SplitPointStrategy.VertexBaricenter,
         float textureDownscale = 1.0f,
-        int maxTextureSize = 0, int textureQuality = 75, TextureFormat textureFormat = TextureFormat.Jpeg)
+        int maxTextureSize = 0, int textureQuality = 75, TextureFormat textureFormat = TextureFormat.Jpeg,
+        bool ignoreNormalMaps = false)
     {
         Func<IMesh, Vertex3> getSplitPoint = splitPointStrategy switch
         {
@@ -109,7 +110,7 @@ public static partial class StagesFacade
             _ => throw new ArgumentOutOfRangeException(nameof(splitPointStrategy))
         };
 
-        return await Split(sourcePath, destPath, divisions, zSplit, textureStrategy, splitPointStrategy, getSplitPoint, textureDownscale, maxTextureSize, textureQuality, textureFormat);
+        return await Split(sourcePath, destPath, divisions, zSplit, textureStrategy, splitPointStrategy, getSplitPoint, textureDownscale, maxTextureSize, textureQuality, textureFormat, ignoreNormalMaps: ignoreNormalMaps);
     }
 
     private static async Task<Dictionary<string, TileBounds>> Split(string sourcePath, string destPath, int divisions,

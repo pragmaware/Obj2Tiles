@@ -219,7 +219,7 @@ namespace Obj2Tiles
                             : rootTextureSizeCap;
                         await StagesFacade.Split(rootSourceObj, rootTempDir, 0,
                             textureDownscale: rootDownscale, maxTextureSize: rootMaxTextureSize, textureQuality: opts.TextureQuality,
-                            textureFormat: opts.TextureFormat);
+                            textureFormat: opts.TextureFormat, ignoreNormalMaps: opts.IgnoreNormalMaps);
                         var compressedRoot = Directory.GetFiles(rootTempDir, "*.obj").FirstOrDefault();
                         if (compressedRoot != null)
                             rootSourceObj = compressedRoot;
