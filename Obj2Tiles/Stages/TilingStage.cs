@@ -32,6 +32,8 @@ public static partial class StagesFacade
         // coarsest decimated whole-model mesh into a root tile gives the root a lightweight, complete
         // representation that is then refined (REPLACE) by the finer child tiles.
         string? rootContentUri = null;
+        TileBounds? rootBounds = null;
+
         if (rootSourceObj != null && File.Exists(rootSourceObj))
         {
             try
@@ -43,6 +45,11 @@ public static partial class StagesFacade
                 else
                     Utils.ConvertB3dm(rootSourceObj, rootTile, gltfOptions);
                 rootContentUri = rootFileName;
+
+                var rootMesh = MeshUtils.LoadMesh(rootSourceObj, out _, false);
+                rootBounds = new TileBounds(rootMesh.Bounds, rootMesh.AverageEdgeLength,
+                    rootMesh.MaximumEdgeLength, rootMesh.FacesCount);
+
                 Console.WriteLine($" ?> Generated root content from '{Path.GetFileName(rootSourceObj)}'");
             }
             catch (Exception ex)
@@ -82,7 +89,7 @@ public static partial class StagesFacade
         // If no --error was passed, derive the root's geometric error from the coarsest LOD using the
         // chosen mode's metric (bounding-box diagonal, or average/maximum triangle edge length), so it
         // scales with the actual mesh size and detail instead of relying on a fixed default like 100.
-        var rootGeometricError = baseError ?? EstimateRootMetric(boundsMapper, errorEstimationMode) * errorFactorValue
+        var rootGeometricError = baseError ?? EstimateRootMetric(boundsMapper, errorEstimationMode, rootBounds) * errorFactorValue
             * LodTextureQualityMultiplier(lods - 1, lodTextureScale);
 
         if (baseError == null)
@@ -311,10 +318,32 @@ public static partial class StagesFacade
         };
     }
 
-    // Metric feeding the root/tileset geometric error, aggregated over the coarsest LOD (the tiles
-    // attached directly under the root) since that's the level structurally closest to it.
-    private static double EstimateRootMetric(Dictionary<string, TileBounds>[] boundsMapper, ErrorEstimationMode mode)
+    // Metric feeding the root/tileset geometric error. Prefer rootBounds — measured from the
+    // actual root mesh — over the coarsest-LOD fallback below, which estimates from a different,
+    // separately-decimated file (the LOD-1 tiles) and previously produced a root error barely
+    // bigger than its own child's, so the root never satisfied refinement into it.
+    private static double EstimateRootMetric(Dictionary<string, TileBounds>[] boundsMapper, ErrorEstimationMode mode,
+        TileBounds? rootBounds)
     {
+        if (rootBounds is { } rb)
+        {
+            if (mode is ErrorEstimationMode.AverageEdgeLength or ErrorEstimationMode.MaximumEdgeLength
+                    or ErrorEstimationMode.ToplevelAverageEdgeLength or ErrorEstimationMode.ToplevelMaximumEdgeLength
+                && rb.FacesCount < MinFacesForEdgeLengthEstimate)
+                return rb.Box.Diagonal() * DegenerateTileDiagonalFactor;
+
+            return mode switch
+            {
+                ErrorEstimationMode.BoundingBoxDiagonal or ErrorEstimationMode.ToplevelBoundingBoxDiagonal =>
+                    rb.Box.Diagonal(),
+                ErrorEstimationMode.AverageEdgeLength or ErrorEstimationMode.ToplevelAverageEdgeLength =>
+                    rb.AverageEdgeLength,
+                ErrorEstimationMode.MaximumEdgeLength or ErrorEstimationMode.ToplevelMaximumEdgeLength =>
+                    rb.MaximumEdgeLength,
+                _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, null)
+            };
+        }
+
         var coarsestLod = boundsMapper[^1].Values;
 
         return mode switch
