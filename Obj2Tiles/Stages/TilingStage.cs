@@ -89,11 +89,17 @@ public static partial class StagesFacade
         // If no --error was passed, derive the root's geometric error from the coarsest LOD using the
         // chosen mode's metric (bounding-box diagonal, or average/maximum triangle edge length), so it
         // scales with the actual mesh size and detail instead of relying on a fixed default like 100.
+        //
+        // The root's texture is downscaled by the same lodTextureScale^(lods-1) factor as the coarsest
+        // LOD (see Program.cs rootDownscale), but is then additionally hard-capped at 256px - a cut the
+        // coarsest LOD tile (capped only at --max-texture-size) doesn't take. That extra loss isn't
+        // captured by lods-1, so using lods here (one multiplier step worse) is a conservative floor on
+        // the root's real quality loss, not an exact measure of the 256px cap's effect.
         var rootGeometricError = baseError ?? EstimateRootMetric(boundsMapper, errorEstimationMode, rootBounds) * errorFactorValue
-            * LodTextureQualityMultiplier(lods - 1, lodTextureScale);
+            * LodTextureQualityMultiplier(lods, lodTextureScale);
 
         if (baseError == null)
-            Console.WriteLine($" ?> No --error provided, auto-computed root geometric error: {rootGeometricError:0.00} ({errorEstimationMode}, factor {errorFactorValue}, texture-quality multiplier {LodTextureQualityMultiplier(lods - 1, lodTextureScale):0.00})");
+            Console.WriteLine($" ?> No --error provided, auto-computed root geometric error: {rootGeometricError:0.00} ({errorEstimationMode}, factor {errorFactorValue}, texture-quality multiplier {LodTextureQualityMultiplier(lods, lodTextureScale):0.00})");
 
         // Generate tileset.json
         var tileset = new Tileset
