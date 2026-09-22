@@ -1270,19 +1270,26 @@ public class MeshT : IMesh
         CalculateMaxMinAreaRect(clustersRects, effWidth, effHeight, Padding, out var maxWidth, out var maxHeight,
             out var textureArea);
 
-        var edgeLength = Math.Max(Common.NextPowerOfTwo((int)Math.Sqrt(textureArea)), 32);
+        // Independent per-axis sizing: a single shared "edge length" collapses width and height
+        // into one number, which is fine for roughly-square UV charts but forces the short axis
+        // up to match the long one for a chart that's naturally very wide-and-short (or tall-and-
+        // narrow) - e.g. a wrapped/panoramic UV layout for a thin architectural strip. Each axis
+        // only gets bumped up to cover what THAT axis actually needs.
+        var baseEdge = Math.Max(Common.NextPowerOfTwo((int)Math.Sqrt(textureArea)), 32);
+        var edgeWidth = baseEdge;
+        var edgeHeight = baseEdge;
 
-        if (edgeLength < maxWidth)
-            edgeLength = Common.NextPowerOfTwo((int)maxWidth);
+        if (edgeWidth < maxWidth)
+            edgeWidth = Common.NextPowerOfTwo((int)maxWidth);
 
-        if (edgeLength < maxHeight)
-            edgeLength = Common.NextPowerOfTwo((int)maxHeight);
+        if (edgeHeight < maxHeight)
+            edgeHeight = Common.NextPowerOfTwo((int)maxHeight);
 
         // NOTE: We could enable rotations but it would be a bit more complex
-        var binPack = new MaxRectanglesBinPack(edgeLength, edgeLength, false);
+        var binPack = new MaxRectanglesBinPack(edgeWidth, edgeHeight, false);
 
-        var newTexture = material.Texture != null ? new Image<Rgba32>(edgeLength, edgeLength) : null;
-        var newNormalMap = material.NormalMap != null ? new Image<Rgba32>(edgeLength, edgeLength) : null;
+        var newTexture = material.Texture != null ? new Image<Rgba32>(edgeWidth, edgeHeight) : null;
+        var newNormalMap = material.NormalMap != null ? new Image<Rgba32>(edgeWidth, edgeHeight) : null;
 
         string? textureFileName = null, normalMapFileName = null, newPathTexture = null, newPathNormalMap = null;
         int count = 0;
@@ -1357,9 +1364,9 @@ public class MeshT : IMesh
                 }
 
                 // fresh atlas
-                newTexture = material.Texture != null ? new Image<Rgba32>(edgeLength, edgeLength) : null;
-                newNormalMap = material.NormalMap != null ? new Image<Rgba32>(edgeLength, edgeLength) : null;
-                binPack = new MaxRectanglesBinPack(edgeLength, edgeLength, false);
+                newTexture = material.Texture != null ? new Image<Rgba32>(edgeWidth, edgeHeight) : null;
+                newNormalMap = material.NormalMap != null ? new Image<Rgba32>(edgeWidth, edgeHeight) : null;
+                binPack = new MaxRectanglesBinPack(edgeWidth, edgeHeight, false);
                 material.Texture = textureFileName;
                 material.NormalMap = normalMapFileName;
 
@@ -1375,7 +1382,7 @@ public class MeshT : IMesh
                 packRect = binPack.Insert(scaledSw + 2 * Padding, scaledSh + 2 * Padding,
                                           FreeRectangleChoiceHeuristic.RectangleBestAreaFit);
                 if (packRect.Width == 0)
-                    throw new Exception($"Packing failed for {scaledSw}x{scaledSh} into {edgeLength}x{edgeLength} (occ {binPack.Occupancy()})");
+                    throw new Exception($"Packing failed for {scaledSw}x{scaledSh} into {edgeWidth}x{edgeHeight} (occ {binPack.Occupancy()})");
             }
 
             int destInnerX = packRect.X + Padding;
@@ -1395,10 +1402,10 @@ public class MeshT : IMesh
                 newNormalMap!.Mutate(c => c.DrawImage(blockN, new Point(destOuterX, destOuterY), 1f));
             }
 
-            double atlasU0 = destInnerX / (double)edgeLength;
-            double atlasV0 = (edgeLength - (destInnerY + scaledSh)) / (double)edgeLength;
-            double innerUw = scaledSw / (double)edgeLength;
-            double innerVh = scaledSh / (double)edgeLength;
+            double atlasU0 = destInnerX / (double)edgeWidth;
+            double atlasV0 = (edgeHeight - (destInnerY + scaledSh)) / (double)edgeHeight;
+            double innerUw = scaledSw / (double)edgeWidth;
+            double innerVh = scaledSh / (double)edgeHeight;
 
             Vertex2 MapUV(double rx, double ry) =>
                 new((float)Math.Clamp(atlasU0 + rx * innerUw, 0, 1),
