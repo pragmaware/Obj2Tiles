@@ -1421,12 +1421,12 @@ public class MeshT : IMesh
                 var vtC = _textureVertices[face.TextureIndexC];
 
                 // chart-local [0..1] (avoid mixing full-texture scales)
-                double rxA = (vtA.X - u0) / Math.Max(u1 - u0, double.Epsilon);
-                double ryA = (vtA.Y - v0) / Math.Max(v1 - v0, double.Epsilon);
-                double rxB = (vtB.X - u0) / Math.Max(u1 - u0, double.Epsilon);
-                double ryB = (vtB.Y - v0) / Math.Max(v1 - v0, double.Epsilon);
-                double rxC = (vtC.X - u0) / Math.Max(u1 - u0, double.Epsilon);
-                double ryC = (vtC.Y - v0) / Math.Max(v1 - v0, double.Epsilon);
+                double rxA = SafeChartFraction(vtA.X, u0, u1);
+                double ryA = SafeChartFraction(vtA.Y, v0, v1);
+                double rxB = SafeChartFraction(vtB.X, u0, u1);
+                double ryB = SafeChartFraction(vtB.Y, v0, v1);
+                double rxC = SafeChartFraction(vtC.X, u0, u1);
+                double ryC = SafeChartFraction(vtC.Y, v0, v1);
 
                 var newVtA = MapUV(rxA, ryA);
                 var newVtB = MapUV(rxB, ryB);
@@ -1553,6 +1553,28 @@ public class MeshT : IMesh
         }
 
         return new RectangleF((float)minX, (float)minY, (float)(maxX - minX), (float)(maxY - minY));
+    }
+
+    // Below this, a cluster's own extent on that axis is treated as a single point rather than a
+    // real span: real charts are many texels wide even after aggressive cropping, so any extent
+    // this small can only be sub-ULP float/double round-off (e.g. from GetClusterRect's RectangleF
+    // truncating to float precision), not a genuine chart. Chosen well above float32 epsilon and
+    // well below the width of a single texel in any texture size this tool produces.
+    private const double MinChartExtent = 1e-6;
+
+    // Maps a texture-vertex coordinate to its fractional [0,1] position within a cluster's own
+    // [min,max] span on one axis. Guards the same case Math.Max(extent, double.Epsilon) was meant
+    // to guard - a degenerate (single-point) cluster - but correctly: double.Epsilon is the smallest
+    // positive double there is, so dividing by it sends any non-exactly-zero numerator to
+    // +/-Infinity, which Math.Clamp then turns into an exact 0 or 1 - i.e. the opposite corner of
+    // the atlas - for every face whose own coordinate isn't bit-identical to the cluster's bound.
+    // For a single-point cluster every face should land on that same one point instead.
+    private static double SafeChartFraction(double value, double min, double max)
+    {
+        var extent = max - min;
+        if (extent <= MinChartExtent)
+            return 0.0;
+        return Math.Clamp((value - min) / extent, 0.0, 1.0);
     }
 
     private double GetTextureArea(IReadOnlyList<int> facesIndexes)
