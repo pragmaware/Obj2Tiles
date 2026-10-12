@@ -55,25 +55,11 @@ public class MeshUtils
                     break;
                 case "vt" when segs.Length >= 3:
 
-                    var vtx = new Vertex2(
+                    // Kept raw here: out-of-range values are wrapped per face by WrapFaceUVs once
+                    // every face is known.
+                    textureVertices.Add(new Vertex2(
                         double.Parse(segs[1], CultureInfo.InvariantCulture),
-                        double.Parse(segs[2], CultureInfo.InvariantCulture));
-
-                    // Wrap UV coordinates to [0, 1] range for mirroring/UDIM workflows (Issue #35).
-                    // Only wrap values that are meaningfully outside [0,1] - a genuine UDIM/mirror
-                    // offset. Exporters commonly emit tiny negative/>1 noise (e.g. -0.000001) right
-                    // at the UV boundary; wrapping THAT via Math.Floor sends it flying to the
-                    // opposite edge of the texture (-0.000001 -> 0.999999) instead of leaving it at
-                    // ~0 where it belongs, corrupting every downstream edge interpolation that
-                    // touches that vertex. Such noise gets clamped back to [0,1] instead.
-                    const double uvNoiseEpsilon = 1e-4;
-                    if (vtx.X < -uvNoiseEpsilon || vtx.X > 1 + uvNoiseEpsilon ||
-                        vtx.Y < -uvNoiseEpsilon || vtx.Y > 1 + uvNoiseEpsilon)
-                        vtx = new Vertex2(vtx.X - Math.Floor(vtx.X), vtx.Y - Math.Floor(vtx.Y));
-                    else if (vtx.X < 0 || vtx.X > 1 || vtx.Y < 0 || vtx.Y > 1)
-                        vtx = new Vertex2(Math.Clamp(vtx.X, 0, 1), Math.Clamp(vtx.Y, 0, 1));
-
-                    textureVertices.Add(vtx);
+                        double.Parse(segs[2], CultureInfo.InvariantCulture)));
                     break;
                 case "vn" when segs.Length >= 4:
                     // Skipping normals (recognized but not used)
@@ -225,9 +211,73 @@ public class MeshUtils
 
         var colors = vertexColors.Count > 0 ? vertexColors : null;
 
+        WrapFaceUVs(textureVertices, facesT);
+
         return textureVertices.Count != 0
             ? new MeshT(vertices, textureVertices, facesT, materials, colors)
             : new Mesh(vertices, faces, colors);
+    }
+
+    // Brings UV coordinates into the [0,1] range for mirroring/UDIM/repeat workflows (Issue #35).
+    //
+    // The wrap offset is chosen per FACE (from the face's UV centroid) and applied to all three of
+    // its corners together, never per texture vertex. Exporters commonly emit faces straddling the
+    // texture seam, e.g. u = 0.99925 / 1.00021 on the same triangle, meaning "just across the
+    // right edge" under REPEAT sampling. Wrapping each vertex on its own turned that into
+    // u = 0.99925 / 0.00021: a triangle stretched across the entire texture width, which pulled a
+    // copy of the whole texture strip onto it and forced its UV cluster (and so the repacked atlas)
+    // to the full source width, e.g. a 16384px atlas for a tile needing a few hundred pixels.
+    //
+    // After shifting, whatever still sticks out of [0,1] (a few texels at most for seam-straddling
+    // faces; also the tiny -0.000001-style export noise right at the boundary) is clamped. A face
+    // whose shifted UVs differ from the shared texture vertex gets its own copy of that vertex, so
+    // neighbours on the other side of the seam are unaffected.
+    private static void WrapFaceUVs(List<Vertex2> textureVertices, List<FaceT> faces)
+    {
+        static bool InUnitRange(Vertex2 v) => v.X is >= 0 and <= 1 && v.Y is >= 0 and <= 1;
+
+        var originalCount = textureVertices.Count;
+        var shiftedCopies = new Dictionary<(int Index, double OffsetU, double OffsetV), int>();
+
+        int Shift(int index, double offsetU, double offsetV)
+        {
+            if (shiftedCopies.TryGetValue((index, offsetU, offsetV), out var copy))
+                return copy;
+
+            var vt = textureVertices[index];
+            textureVertices.Add(new Vertex2(Math.Clamp(vt.X - offsetU, 0, 1), Math.Clamp(vt.Y - offsetV, 0, 1)));
+            copy = textureVertices.Count - 1;
+            shiftedCopies.Add((index, offsetU, offsetV), copy);
+            return copy;
+        }
+
+        foreach (var face in faces)
+        {
+            var a = textureVertices[face.TextureIndexA];
+            var b = textureVertices[face.TextureIndexB];
+            var c = textureVertices[face.TextureIndexC];
+
+            if (InUnitRange(a) && InUnitRange(b) && InUnitRange(c))
+                continue;
+
+            var offsetU = Math.Floor((a.X + b.X + c.X) / 3);
+            var offsetV = Math.Floor((a.Y + b.Y + c.Y) / 3);
+
+            // Offset (0,0) needs no copy: the clamp of the originals below is exactly its result.
+            if (offsetU == 0 && offsetV == 0)
+                continue;
+
+            face.TextureIndexA = Shift(face.TextureIndexA, offsetU, offsetV);
+            face.TextureIndexB = Shift(face.TextureIndexB, offsetU, offsetV);
+            face.TextureIndexC = Shift(face.TextureIndexC, offsetU, offsetV);
+        }
+
+        for (var i = 0; i < originalCount; i++)
+        {
+            var vt = textureVertices[i];
+            if (!InUnitRange(vt))
+                textureVertices[i] = new Vertex2(Math.Clamp(vt.X, 0, 1), Math.Clamp(vt.Y, 0, 1));
+        }
     }
 
     #region Splitters

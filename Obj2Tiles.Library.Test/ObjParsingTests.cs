@@ -132,6 +132,42 @@ public class ObjParsingTests
         // If we got here, UVs were wrapped instead of throwing
     }
 
+    [Test]
+    public void LoadMesh_SeamStraddlingUV_WrappedPerFace()
+    {
+        var mesh = (MeshT)MeshUtils.LoadMesh(Path.Combine(TestDataPath, "triangle-uv-seam.obj"));
+
+        Vertex2[] Uvs(int faceIndex)
+        {
+            var face = mesh.Faces[faceIndex];
+            return new[]
+            {
+                mesh.TextureVertices[face.TextureIndexA],
+                mesh.TextureVertices[face.TextureIndexB],
+                mesh.TextureVertices[face.TextureIndexC]
+            };
+        }
+
+        // u = 0.99925 / 1.00053 / 1.00021 must stay a sliver at the right edge, not be torn into
+        // 0.99925 / 0.00053 / 0.00021 spanning the whole texture width.
+        var seam = Uvs(0);
+        seam[0].X.ShouldBe(0.99925, tolerance: 1e-9);
+        seam[1].X.ShouldBe(1.0, tolerance: 1e-9);
+        seam[2].X.ShouldBe(1.0, tolerance: 1e-9);
+
+        // The in-range neighbour sharing texture vertex 1 is untouched.
+        var neighbour = Uvs(1);
+        neighbour[0].X.ShouldBe(0.99925, tolerance: 1e-9);
+        neighbour[1].X.ShouldBe(0.99, tolerance: 1e-9);
+
+        // A face entirely in UDIM tile 1002 is still shifted back into [0,1] as a whole.
+        var udim = Uvs(2);
+        udim[0].X.ShouldBe(0.2, tolerance: 1e-9);
+        udim[1].X.ShouldBe(0.3, tolerance: 1e-9);
+        udim[2].X.ShouldBe(0.25, tolerance: 1e-9);
+        udim[0].Y.ShouldBe(0.3, tolerance: 1e-9);
+    }
+
     // --- Line element skipping (Fixed: Issue #64) ---
 
     [Test]

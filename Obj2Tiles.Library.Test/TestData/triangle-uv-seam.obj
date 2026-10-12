@@ -1,0 +1,18 @@
+# Triangles whose UVs straddle the u=1 texture seam (as exported for REPEAT sampling), plus a
+# neighbour sharing a texture vertex with the straddling one and a genuine UDIM (tile 1002) face.
+v 0 0 0
+v 1 0 0
+v 0.5 1 0
+v 0 1 0
+vt 0.99925 0.05069
+vt 1.00053 0.05069
+vt 1.00021 0.05048
+vt 0.99 0.04
+vt 1.2 0.3
+vt 1.3 0.3
+vt 1.25 0.4
+mtllib triangle-uv-negative.mtl
+usemtl Default
+f 1/1 2/2 3/3
+f 1/1 3/4 4/4
+f 1/5 2/6 3/7
