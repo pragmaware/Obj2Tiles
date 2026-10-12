@@ -12,12 +12,13 @@ using Obj2Tiles.Stages;
 using Obj2Tiles.Stages.Model;
 using Obj2Tiles.Tiles;
 using SilentWave.Obj2Gltf;
+using SixLabors.ImageSharp;
 
 namespace Obj2Tiles
 {
     internal class Program
     {
-        private static async Task Main(string[] args)
+        private static async Task<int> Main(string[] args)
         {
             // Accept enum option values case-insensitively (e.g. --texture-format webp) for a
             // friendlier CLI; option names keep their default (case-insensitive) handling.
@@ -33,10 +34,20 @@ namespace Obj2Tiles
                 return Run(opts);
             });
 
-            if (oResult.Tag == ParserResultType.NotParsed)
+            if (oResult is NotParsed<Options> notParsed)
             {
+                // --help and --version surface as parse errors but are successful invocations.
+                if (notParsed.Errors.All(e => e.Tag is ErrorType.HelpRequestedError or ErrorType.HelpVerbRequestedError
+                        or ErrorType.VersionRequestedError))
+                    return 0;
+
                 Console.WriteLine("Usage: obj2tiles [options]");
+                return 1;
             }
+
+            // Run() signals invalid options through Environment.ExitCode; surface it as the
+            // process exit code so batch/CI callers (and the quality gate) can trust it.
+            return Environment.ExitCode;
         }
 
         internal static void ApplyPreset(Options opts, string[] args)
@@ -91,6 +102,15 @@ namespace Obj2Tiles
             // mistake a rejected configuration for a successful conversion.
             if (!CheckOptions(opts))
             {
+                Environment.ExitCode = 1;
+                return;
+            }
+
+            // --scale accepts decimals and fractions (see Options.TryParseScale); an invalid
+            // value must fail before any output is written.
+            if (!Options.TryParseScale(opts.Scale, out var scale, out var scaleError))
+            {
+                Console.WriteLine($" !> {scaleError}");
                 Environment.ExitCode = 1;
                 return;
             }
@@ -176,11 +196,19 @@ namespace Obj2Tiles
 
                 Console.WriteLine(" ?> Splitting stage done in {0}", sw.Elapsed);
 
+                // Only the Splitting stage reads the decoded source textures: drop them and hand
+                // ImageSharp's pooled buffers back to the OS so they do not inflate the Tiling peak.
+                TexturesCache.Clear();
+                Configuration.Default.MemoryAllocator.ReleaseRetainedResources();
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                GC.Collect();
+
                 if (opts.StopAt == Stage.Splitting)
                     return;
 
                 var gpsCoords = opts.Latitude != null && opts.Longitude != null
-                    ? new GpsCoords(opts.Latitude.Value, opts.Longitude.Value, opts.Altitude, opts.Scale, opts.YUpToZUp)
+                    ? new GpsCoords(opts.Latitude.Value, opts.Longitude.Value, opts.Altitude, scale, opts.YUpToZUp)
                     : null;
 
                 Console.WriteLine();
